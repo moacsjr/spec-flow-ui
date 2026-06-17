@@ -1,0 +1,55 @@
+/* Design tokens — RFC Epic View, seção 2.1.
+   --accent é o único token de marca configurável; todo o resto deriva da base neutra quente. */
+:root {
+  /* Base / superfícies */
+  --bg:             #14110e;
+  --bg-glow:        rgba(217, 119, 87, 0.1);
+  --surface:        #1a1613;
+  --surface-raised: #211c18;
+  --surface-hero-a: #211c18;
+  --surface-hero-b: #1a1613;
+  --well:           #19150f;
+  --topbar:         rgba(20, 17, 14, 0.7);
+
+  /* Bordas */
+  --border:        #2a2420;
+  --border-strong: #322b25;
+  --border-hover:  #43392f;
+  --track:         #2a2420;
+
+  /* Texto (do mais forte ao mais fraco) */
+  --text:       #f2ede6;
+  --text-2:     #cbc2b6;
+  --text-3:     #b3aa9e;
+  --text-muted: #8a8178;
+  --text-faint: #7d746a;
+  --text-dim:   #6f675d;
+  --text-ghost: #4d463f;
+
+  /* Accent (terracota) — único token de marca */
+  --accent:        #d97757;
+  --accent-light:  #e6a484;
+  --accent-soft:   rgba(217, 119, 87, 0.13);
+  --accent-border: rgba(217, 119, 87, 0.3);
+  --selection:     rgba(217, 119, 87, 0.3);
+
+  /* Semântica de status */
+  --done:     #7bbf9e;
+  --done-bg:  rgba(123, 191, 158, 0.13);
+  --progress: var(--accent);
+  --progress-bg: var(--accent-soft);
+  --todo:     #8a8178;
+  --todo-bg:  rgba(138, 129, 120, 0.14);
+
+  /* Avatares (initials) — texto escuro #1a1410 */
+  --av-blue:      #6f9bd1;
+  --av-purple:    #b08ad1;
+  --av-green:     #7bbf9e;
+  --av-terracota: #d97757;
+  --av-ink:       #1a1410;
+
+  /* Tipografia */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body:    'Manrope', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, monospace;
+}
