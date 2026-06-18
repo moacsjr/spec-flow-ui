@@ -1,0 +1,31 @@
+name: Generate Spec
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  generate-spec:
+    if: >
+      github.event.label.name == 'spec-flow:spec' &&
+      contains(github.event.issue.title, '[FEATURE]')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate spec.md
+        run: npx spec-flow generate-spec --issue-number ${{ github.event.issue.number }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
