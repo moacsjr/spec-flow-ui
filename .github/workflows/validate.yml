@@ -18,20 +18,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-
-      - name: Checkout spec-wave CLI
-        uses: actions/checkout@v4
-        with:
-          repository: moacsjr/spec-wave
-          ref: feat/persistent-config-and-commands
-          path: .spec-wave-cli
-
-      - name: Install spec-wave CLI
-        run: npm install --prefix .spec-wave-cli
+          node-version: '22'
 
       - name: Validate spec and plan
-        run: node .spec-wave-cli/packages/spec-wave/bin/spec-wave.mjs validate --issue-number ${{ github.event.issue.number }}
+        run: npx @spec-wave/cli validate --issue-number ${{ github.event.issue.number }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
