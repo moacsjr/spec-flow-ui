@@ -1,0 +1,29 @@
+name: Decompose Feature
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  decompose:
+    if: >
+      github.event.label.name == 'spec-flow:decompose' &&
+      contains(github.event.issue.title, '[FEATURE]')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Decompose into Stories and Tasks
+        run: npx spec-flow decompose --issue-number ${{ github.event.issue.number }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
