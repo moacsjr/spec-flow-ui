@@ -7,7 +7,7 @@ on:
 jobs:
   generate-spec:
     if: >
-      github.event.label.name == 'spec-flow:spec' &&
+      github.event.label.name == 'spec-wave:spec' &&
       contains(github.event.issue.title, '[FEATURE]')
     runs-on: ubuntu-latest
     permissions:
@@ -24,7 +24,7 @@ jobs:
           node-version: '20'
 
       - name: Generate spec.md
-        run: npx spec-flow generate-spec --issue-number ${{ github.event.issue.number }}
+        run: npx spec-wave generate-spec --issue-number ${{ github.event.issue.number }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
