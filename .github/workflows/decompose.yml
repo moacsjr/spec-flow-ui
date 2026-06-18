@@ -7,7 +7,7 @@ on:
 jobs:
   decompose:
     if: >
-      github.event.label.name == 'spec-flow:decompose' &&
+      github.event.label.name == 'spec-wave:decompose' &&
       contains(github.event.issue.title, '[FEATURE]')
     runs-on: ubuntu-latest
     permissions:
@@ -22,7 +22,7 @@ jobs:
           node-version: '20'
 
       - name: Decompose into Stories and Tasks
-        run: npx spec-flow decompose --issue-number ${{ github.event.issue.number }}
+        run: npx spec-wave decompose --issue-number ${{ github.event.issue.number }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
