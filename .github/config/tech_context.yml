@@ -1,0 +1,52 @@
+# tech_context.yml — Fonte de verdade estática do sistema (RFC-002 §4)
+#
+# O comando `generate-plan` lê este arquivo para embasar o plano técnico, usando
+# APENAS as tecnologias e serviços aqui declarados. Mantenha-o atualizado.
+#
+# Augmentação dinâmica (automática, não precisa editar): o agente também lê as
+# migrations recentes e as versões exatas de pacotes (package.json) em tempo de
+# execução. Para desvios pontuais, adicione uma seção `## Tech Override` no corpo
+# da issue da Feature — ela é mesclada (deep-merge) sobre esta config.
+
+system_info:
+  name: "spec-flow-ui"
+  stack:
+    backend: "Node.js + Express 4 + Knex 3 (TypeScript 5.6, ESM, executado via tsx)"
+    frontend: "React 18 + Vite 5 (TypeScript 5.6; react-markdown + remark-gfm)"
+    database: "SQLite (better-sqlite3 11) via Knex query builder + migrations"
+    shared: "Pacote @spec-flow/shared — tipos TS do contrato de exibição (sem build; transpilado on-the-fly por Vite/tsx)"
+    infra: "Processo único Node.js — em produção o Express serve o client/dist (build estático do Vite) + fallback SPA"
+  architecture: "Monorepo npm workspaces (client / server / shared). Fullstack: TODA integração com o GitHub vive no backend; o frontend só consome JSON pronto da API /api/*."
+
+security:
+  auth_protocol: "Sem autenticação de usuário no app (frontend é read-only). O único segredo é o GITHUB_TOKEN (Personal Access Token), lido de variável de ambiente no servidor e NUNCA exposto ao browser."
+  rbac_roles: []  # App não possui RBAC — acesso ao GitHub é centralizado por um único token de serviço.
+  hardening:
+    - "helmet (cabeçalhos HTTP seguros)"
+    - "cors restrito a CORS_ORIGIN (default http://localhost:5173)"
+    - "express-rate-limit: 120 req/min por IP"
+    - "Segredos só via env (GITHUB_TOKEN, GITHUB_TEAM); nenhum hard-coded"
+
+database_schemas:
+  - table: "repositories"
+    columns: "id (PK autoincrement), name (text), url (text, unique), created_at (datetime). Índice idx_repositories_name em name."
+
+existing_services:
+  # APIs externas consumidas pelo backend (server/src/github/*).
+  - name: "GitHub GraphQL API"
+    endpoint: "https://api.github.com/graphql"
+    auth: "Bearer GITHUB_TOKEN"
+    docs: "https://docs.github.com/graphql — usa a feature sub_issues (header de preview) para buscar Epic → Features → Stories → Tasks"
+  - name: "GitHub Contents API (REST)"
+    endpoint: "https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+    auth: "Bearer GITHUB_TOKEN"
+    docs: "https://docs.github.com/rest/repos/contents — leitura de arquivos do repositório (ex.: spec.md / plan.md)"
+  # API interna exposta pelo backend e consumida pelo frontend.
+  - name: "spec-flow API interna (/api/*)"
+    endpoint: "/api/repositories · /api/repositories/{id}/epics · /api/repositories/{id}/workitems/{level}/{number}"
+    auth: "Nenhuma (rede interna; única via de acesso do frontend ao GitHub)"
+    docs: "server/src/routes/repositoryRoutes.ts"
+
+internal_libraries:
+  - "@spec-flow/shared — tipos TypeScript compartilhados entre client e server (contrato de exibição WorkItemView etc.)"
+  - "server/src/lib/* — utilitários internos: logger (winston), slugify, status, date, avatar, errors, validation"
