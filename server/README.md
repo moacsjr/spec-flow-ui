@@ -1,14 +1,19 @@
-# spec-flow-server
+# server
 
-Backend do Dashboard (Story #3) — Express + Knex + SQLite (`better-sqlite3`).
-Expõe a lista de repositórios conectados consumida pelo frontend `epic-view`.
+Backend Express + Knex + SQLite (`better-sqlite3`). **Dono de toda a integração
+com o GitHub** (GraphQL de sub-issues + Contents API para `plan.md`) e da API REST
+consumida pelo frontend `client`. O token vive só aqui (`GITHUB_TOKEN`).
 
 ## Endpoints
 
-| Método | Rota                 | Descrição                                   |
-|--------|----------------------|---------------------------------------------|
-| GET    | `/api/repositories`  | Lista repositórios (até 50, recentes 1º)    |
-| GET    | `/status`            | Health check (`{ status: "ok", uptime }`)   |
+| Método | Rota                             | Descrição                                       |
+|--------|----------------------------------|-------------------------------------------------|
+| GET    | `/api/workitems/:level/:number`  | `WorkItemView` (epic/feature/story) do GitHub   |
+| GET    | `/api/repositories`              | Lista repositórios (até 50, recentes 1º)        |
+| GET    | `/status`                        | Health check (`{ status: "ok", uptime }`)       |
+
+`workitems`: nível/número inválido → 400; não encontrado → 404; erro do GitHub →
+502; `GITHUB_*` ausente → 503 (sem fixture de fallback).
 
 Schema de `GET /api/repositories`:
 

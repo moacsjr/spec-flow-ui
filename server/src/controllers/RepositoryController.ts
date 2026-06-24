@@ -1,48 +1,15 @@
-// Controller de repositórios. Lê do SQLite via Knex (queries parametrizadas) e
-// devolve o DTO no schema acordado com o frontend:
-//   { id, name, url, createdAt }  — createdAt em ISO 8601.
+// Controllers de repositórios:
+//   - getAllRepositories  → lista do SQLite (Dashboard)
+//   - getRepositoryEpics  → épicos do repo no GitHub (issues [EPIC])
 
-import type { Request, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import { db } from '../db/index.ts';
 import { config } from '../config.ts';
 import { logger } from '../lib/logger.ts';
 import { isValidHttpUrl } from '../lib/validation.ts';
-
-interface RepositoryRow {
-  id: number;
-  name: string;
-  url: string;
-  created_at: string;
-}
-
-export interface RepositoryDTO {
-  id: number;
-  name: string;
-  url: string;
-  createdAt: string;
-}
-
-// SQLite guarda CURRENT_TIMESTAMP como "YYYY-MM-DD HH:MM:SS" em UTC, sem
-// sufixo de fuso. Normalizamos para ISO 8601 para o frontend formatar.
-function toIso(raw: string): string {
-  const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T') + 'Z';
-  const d = new Date(normalized);
-  return Number.isNaN(d.getTime()) ? raw : d.toISOString();
-}
-
-function toDTO(row: RepositoryRow): RepositoryDTO {
-  // URL inválida no banco (dados corrompidos): logamos mas não bloqueamos a
-  // listagem (spec — caso de erro "Violação/URL inválida": não bloquear).
-  if (!isValidHttpUrl(row.url)) {
-    logger.warn(`Repositório #${row.id} com URL inválida: ${row.url}`);
-  }
-  return {
-    id: row.id,
-    name: row.name,
-    url: row.url,
-    createdAt: toIso(row.created_at),
-  };
-}
+import { HttpError } from '../lib/errors.ts';
+import { loadEpicSummaries } from '../services/workItemService.ts';
+import { toRepositoryDTO, type RepositoryRow } from '../services/repositoryService.ts';
 
 export async function getAllRepositories(_req: Request, res: Response): Promise<void> {
   const rows = await db<RepositoryRow>('repositories')
@@ -50,5 +17,32 @@ export async function getAllRepositories(_req: Request, res: Response): Promise<
     .orderBy('created_at', 'desc') // mais recentes primeiro
     .limit(config.pageLimit); // até 50 (paginação futura)
 
-  res.json(rows.map(toDTO));
+  for (const row of rows) {
+    // URL inválida (dados corrompidos): loga mas não bloqueia a listagem.
+    if (!isValidHttpUrl(row.url)) logger.warn(`Repositório #${row.id} com URL inválida: ${row.url}`);
+  }
+
+  res.json(rows.map(toRepositoryDTO));
+}
+
+export async function getRepositoryEpics(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const repoId = Number(req.params.id);
+  if (!Number.isInteger(repoId) || repoId <= 0) {
+    res.status(400).json({ error: `Repositório inválido: "${req.params.id}".` });
+    return;
+  }
+
+  try {
+    res.json(await loadEpicSummaries(repoId));
+  } catch (err) {
+    if (err instanceof HttpError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
 }

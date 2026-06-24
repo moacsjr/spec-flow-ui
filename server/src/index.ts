@@ -1,11 +1,12 @@
-// Servidor Express do Dashboard (Story #3).
+// Servidor Express da app fullstack.
 //
-// Middlewares de segurança (spec, seção Segurança):
-//   - helmet           → headers seguros
-//   - cors restrito    → só a origem do frontend
-//   - rate limiting    → mitiga abuso
-// O schema é garantido no boot (migrate) e populado em dev (seed).
+// Responsabilidades:
+//   - API /api/* (repositories + workitems) — única via de acesso ao GitHub
+//   - Middlewares de segurança: helmet, CORS restrito, rate limiting
+//   - Em produção (serveStatic), serve o build do frontend (client/dist) + SPA fallback
+// O schema do SQLite é garantido no boot (migrate) e populado em dev (seed).
 
+import path from 'node:path';
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -23,19 +24,28 @@ export function createApp() {
   app.use(express.json());
   app.use(rateLimit({ windowMs: 60_000, limit: 120 })); // 120 req/min por IP
 
-  // Health check (spec: endpoint /status).
+  // Health check.
   app.get('/status', (_req, res) => {
     res.json({ status: 'ok', uptime: process.uptime() });
   });
 
   app.use('/api', repositoryRoutes);
 
-  // 404 para rotas não mapeadas.
-  app.use((_req, res) => {
+  // 404 JSON — escopado em /api para não engolir as rotas SPA do fallback.
+  app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Not found' });
   });
 
-  // Handler de erros — responde 500 e loga o stack.
+  // Produção: serve o frontend buildado e faz fallback de qualquer GET não-/api
+  // para o index.html (hash-router do client resolve a rota no browser).
+  if (config.serveStatic) {
+    app.use(express.static(config.clientDist));
+    app.get('*', (_req, res) => {
+      res.sendFile(path.join(config.clientDist, 'index.html'));
+    });
+  }
+
+  // Handler de erros — responde com o status do HttpError (se houver) ou 500.
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     logger.error(err instanceof Error ? err : String(err));
     res.status(500).json({ error: 'Internal server error' });

@@ -1,0 +1,25 @@
+{
+  "name": "spec-flow-ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "App fullstack do spec-flow: frontend React (client) + backend Express/Knex (server), com tipos compartilhados (shared). Toda integração com o GitHub vive no backend.",
+  "workspaces": [
+    "shared",
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,magenta \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "npm -w server run dev",
+    "dev:client": "npm -w client run dev",
+    "build": "npm -w client run build",
+    "start": "SERVE_STATIC=true npm -w server run start",
+    "typecheck": "npm -w shared run typecheck && npm -w client run typecheck && npm -w server run typecheck",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.60.0",
+    "concurrently": "^9.1.0"
+  }
+}
