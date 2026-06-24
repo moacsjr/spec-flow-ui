@@ -6,9 +6,11 @@ labels: "[FEATURE]"
 assignees: ""
 ---
 
-# Objetivo
+# Visão Geral
 
-<!-- O que esta Feature entrega e qual problema resolve? -->
+- **Objetivo:** <!-- O que esta Feature entrega e qual problema resolve? -->
+- **Personas:** <!-- Quais usuários são afetados? (ex.: Garçom, Cozinha) -->
+- **Critérios de Sucesso:** <!-- Resultados mensuráveis -->
 
 # Regras de Negócio
 
@@ -16,17 +18,37 @@ assignees: ""
 
 # Fluxos
 
-<!-- Descreva o fluxo principal e os fluxos alternativos -->
+## Fluxo Principal (Happy Path)
 
-# Critérios de Aceite
+<!-- Passo a passo do caminho feliz -->
 
-- [ ] 
-- [ ] 
+## Fluxos Alternativos
 
-# Casos de Erro
+<!-- Variações do fluxo principal -->
+
+## Cenários de Erro
 
 <!-- O que acontece quando algo dá errado? Como o sistema se comporta? -->
 
+# Critérios de Aceite
+
+<!-- Use o formato Gherkin (Given/When/Then). Um cenário por critério. -->
+
+```gherkin
+Feature: [Nome da Feature]
+  Scenario: [Título do cenário]
+    Given [pré-condição]
+    When [ação]
+    Then [resultado esperado]
+```
+
 # Dependências
 
-<!-- Outras Features, integrações, APIs externas ou pré-requisitos -->
+- **Internas:** <!-- Serviços/APIs dentro do sistema -->
+- **Externas:** <!-- Sistemas de terceiros -->
+
+# Requisitos Não-Funcionais
+
+- **Performance:** <!-- ex.: tempo de resposta < 200ms -->
+- **Segurança:** <!-- ex.: RBAC obrigatório -->
+- **Usabilidade:** <!-- ex.: responsivo em mobile -->
