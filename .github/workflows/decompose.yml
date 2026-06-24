@@ -19,7 +19,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
 
       - name: Decompose into Stories and Tasks
         run: npx @spec-wave/cli decompose --issue-number ${{ github.event.issue.number }}
