@@ -74,7 +74,7 @@
   },
   "ai": {
     "provider": "openrouter",
-    "model": "deepseek/deepseek-r1-0528"
+    "model": "deepseek/deepseek-chat-v3.1"
   },
   "initializedAt": "2026-06-25T18:23:38.640Z"
 }

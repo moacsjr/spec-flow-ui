@@ -7,6 +7,7 @@
 
 import { config } from '../config.ts';
 import { NotConfiguredError, UpstreamError } from '../lib/errors.ts';
+import { stripWrappingCodeFence } from '../lib/markdown.ts';
 import type { ArtifactKind } from '@spec-flow/shared';
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
@@ -83,6 +84,7 @@ export async function generateArtifact({
       },
       body: JSON.stringify({
         model: config.openrouter.model,
+        max_tokens: config.openrouter.maxTokens,
         messages: [
           { role: 'system', content: systemPrompt(kind) },
           { role: 'user', content: userParts.join('\n') },
@@ -108,5 +110,6 @@ export async function generateArtifact({
   if (!content || content.trim().length === 0) {
     throw new UpstreamError('OpenRouter devolveu uma resposta vazia.');
   }
-  return content.trim();
+  // Defesa: alguns modelos ignoram a instrução e embrulham tudo em ```markdown.
+  return stripWrappingCodeFence(content.trim()) ?? '';
 }

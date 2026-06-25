@@ -31,7 +31,11 @@ export const config = {
   // A chave vive SÓ no servidor. Sem chave, os endpoints de refino retornam 503.
   openrouter: {
     apiKey: process.env.OPENROUTER_API_KEY ?? '',
-    model: process.env.OPENROUTER_MODEL ?? 'deepseek/deepseek-r1',
+    model: process.env.OPENROUTER_MODEL ?? 'deepseek/deepseek-v4-pro',
+    // Teto de saída do refino. Generoso para caber o documento inteiro + o
+    // raciocínio dos modelos reasoning (sem limite explícito, o default do
+    // provider truncava o plan no meio).
+    maxTokens: Number(process.env.OPENROUTER_MAX_TOKENS ?? 8000),
   },
 
   // Build do frontend, servido em produção (processo único).

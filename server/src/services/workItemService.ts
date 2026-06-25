@@ -39,6 +39,7 @@ import {
 } from '../github/adapter.ts';
 import type { AdaptContext } from '../github/adapter.ts';
 import { slugify } from '../lib/slugify.ts';
+import { stripWrappingCodeFence } from '../lib/markdown.ts';
 import {
   configForRepository,
   getRepositoryOr404,
@@ -104,10 +105,13 @@ export async function loadWorkItem(
 
   if (level === 'feature') {
     const { specPath, planPath } = await resolveFeaturePaths(config, number, issue.title);
-    [ctx.spec, ctx.plan] = await Promise.all([
+    const [spec, plan] = await Promise.all([
       fetchFileContent(config, specPath).catch(() => null),
       fetchFileContent(config, planPath).catch(() => null),
     ]);
+    // Geradores às vezes embrulham o doc inteiro em ```markdown — desfaz p/ exibir.
+    ctx.spec = stripWrappingCodeFence(spec);
+    ctx.plan = stripWrappingCodeFence(plan);
     return adaptFeature(issue, ctx);
   }
   return adaptStory(issue, ctx);
