@@ -1,17 +1,80 @@
 {
-  "version": "0.3.1",
+  "version": "0.4.0",
   "owner": "moacsjr",
   "repo": "spec-flow-ui",
   "project": {
     "title": "spec-flow-ui — Spec Flow",
-    "url": null,
-    "id": null,
-    "number": null,
-    "fields": null
+    "url": "https://github.com/users/moacsjr/projects/14",
+    "id": "PVT_kwHOACoZos4BbrD_",
+    "number": 14,
+    "fields": {
+      "Etapa": {
+        "id": "PVTSSF_lAHOACoZos4BbrD_zhWZ-ZU",
+        "options": {
+          "📥 Backlog": "cd814852",
+          "🎯 Priorizado": "7e4f2ccd",
+          "📋 Spec": "3c9331aa",
+          "📋 Plan": "6dd3b394",
+          "✅ Ready": "75bb6e97",
+          "📋 Backlog Técnico": "28f0f709",
+          "🚧 Desenvolvimento": "cb6fbc72",
+          "👀 Code Review": "b5d23b72",
+          "🧪 QA": "1f2b70ad",
+          "📋 Homologação": "bd4d03f2",
+          "🚀 Deploy": "fb1b5d55",
+          "🎉 Done": "6aeb481c"
+        }
+      },
+      "Work Item Type": {
+        "id": "PVTSSF_lAHOACoZos4BbrD_zhWZ-aE",
+        "options": {
+          "Initiative": "59593e32",
+          "Epic": "6a673dd4",
+          "Feature": "029f3795",
+          "Story": "6bcc75f6",
+          "Task": "480c9958",
+          "Bug": "a386db9c",
+          "Spike": "edff4aab",
+          "RFC": "662f5143"
+        }
+      },
+      "Priority": {
+        "id": "PVTSSF_lAHOACoZos4BbrD_zhWZ-aQ",
+        "options": {
+          "P0": "798938fd",
+          "P1": "b0b94530",
+          "P2": "bbaa8ae8",
+          "P3": "b26960fb"
+        }
+      },
+      "Story Points": {
+        "id": "PVTSSF_lAHOACoZos4BbrD_zhWZ-b8",
+        "options": {
+          "1": "0ba35a5d",
+          "2": "e0e21c4a",
+          "3": "3f5da6c1",
+          "5": "f105fbad",
+          "8": "242db652",
+          "13": "3bdbc848",
+          "21": "b79aead1"
+        }
+      },
+      "Area": {
+        "id": "PVTSSF_lAHOACoZos4BbrD_zhWZ-cA",
+        "options": {
+          "Frontend": "8723c8c6",
+          "Backend": "44cb7325",
+          "Mobile": "e1a02fb2",
+          "Infra": "7f604260",
+          "DevOps": "7b40fb05",
+          "Data": "c252a53b"
+        }
+      }
+    }
   },
   "ai": {
-    "provider": "openrouter",
-    "model": "deepseek/deepseek-r1"
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6"
   },
-  "initializedAt": "2026-06-24T18:19:43.159Z"
+  "initializedAt": "2026-06-25T18:23:38.640Z"
 }
