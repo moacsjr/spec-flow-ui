@@ -1,9 +1,9 @@
 {
-  "version": "0.5.0",
+  "version": "0.5.2",
   "owner": "moacsjr",
   "repo": "spec-flow-ui",
   "project": {
-    "title": "spec-flow-ui — Spec Flow",
+    "title": "spec-flow-ui — Spec Wave",
     "url": "https://github.com/users/moacsjr/projects/14",
     "id": "PVT_kwHOACoZos4BbrD_",
     "number": 14,
@@ -84,6 +84,5 @@
     "provider": "openrouter",
     "model": "deepseek/deepseek-chat-v3.1"
   },
-  "initializedAt": "2026-06-25T18:23:38.640Z",
-  "refreshedAt": "2026-06-26T02:02:18.442Z"
+  "initializedAt": "2026-06-26T12:17:55.215Z"
 }
