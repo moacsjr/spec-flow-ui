@@ -262,6 +262,7 @@ export function adaptFeature(issue: GhIssue, ctx: AdaptContext = {}): WorkItemVi
     descriptionMdx: issue.body || '',
     specMdx: ctx.spec ?? null,
     planMdx: ctx.plan ?? null,
+    planApproved: labelNames(issue).includes('spec-wave:plan-approved'),
     headerPct: pct,
     progressLabel: 'Progresso da feature',
     childrenLabel: 'Stories',

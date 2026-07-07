@@ -52,6 +52,10 @@ export function Hero({ view, onSave }: HeroProps) {
           <span className="code">{view.code}</span>
         </div>
 
+        {view.planApproved && (
+          <span className="badge badge--approved">Aprovado</span>
+        )}
+
         {title.editing ? (
           <div className="hero__title-edit">
             <input
