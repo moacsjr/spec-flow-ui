@@ -101,4 +101,5 @@ Sem `VITE_COGNITO_*` no client, a auth fica desabilitada e o backend usa `DEV_TE
 
 ## Futuro
 
-Limpeza de tenants órfãos (abandonados após aceite de convite), remoção de membros pela UI, e-mail de convite (SES), cotas por membro, relatórios de uso.
+- **Refine assíncrono** (202 + item `JOB#` no Dynamo + polling do client): liberta o refine do teto de 29 s do HTTP API e permite voltar a modelos reasoning. Medição 2026-07-07: `deepseek-v4-pro` = 57 s (estoura); `deepseek-chat` = 7–14 s (default atual). O alarme `RefineP90 > 25 s` é o gatilho.
+- Limpeza de tenants órfãos (abandonados após aceite de convite), remoção de membros pela UI, e-mail de convite (SES), cotas por membro, relatórios de uso.

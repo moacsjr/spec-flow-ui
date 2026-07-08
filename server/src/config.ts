@@ -32,7 +32,10 @@ export const config = {
   openrouter: {
     secretArn: process.env.OPENROUTER_SECRET_ARN ?? '',
     apiKey: process.env.OPENROUTER_API_KEY ?? '', // dev local
-    model: process.env.OPENROUTER_MODEL ?? 'deepseek/deepseek-v4-pro',
+    // Default não-reasoning: medido em 2026-07-07, deepseek-v4-pro (reasoning)
+    // levou 57 s — estoura o teto de 29 s do HTTP API; deepseek-chat fez a mesma
+    // tarefa em 7–14 s. Refine assíncrono (202+job+polling) fica como melhoria.
+    model: process.env.OPENROUTER_MODEL ?? 'deepseek/deepseek-chat',
     // Teto de saída do refino. Generoso para caber o documento inteiro + o
     // raciocínio dos modelos reasoning.
     maxTokens: Number(process.env.OPENROUTER_MAX_TOKENS ?? 8000),
