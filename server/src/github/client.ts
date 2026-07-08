@@ -5,8 +5,14 @@
 // traz suas Stories, que trazem suas Tasks — o suficiente para o adapter
 // calcular o progresso a partir das Tasks fechadas.
 
-import type { GhEpicPayload, GhIssue } from './types.ts';
-import { NotFoundError, UpstreamError } from '../lib/errors.ts';
+import type {
+  GhEpicPayload,
+  GhIssue,
+  GhMilestoneSummary,
+  GhPullRequestRef,
+  GhSnapshotIssue,
+} from './types.ts';
+import { HttpError, NotFoundError, UpstreamError } from '../lib/errors.ts';
 import { cachedGet } from '../lib/githubCache.ts';
 
 // Config do Projects v2 de um repositório (descoberta no cadastro e persistida no
@@ -222,6 +228,202 @@ export async function fetchEpicSummaries(config: GitHubConfig): Promise<GhIssue[
   return (repo.issues?.nodes ?? []).map(normalize);
 }
 
+// --- Snapshot achatado do repositório (RFC-003, workspaces) ---
+
+// Query paginada e FLAT: todas as issues do repo (abertas e fechadas), sem
+// subárvore. Hierarquia via `parent` e progresso via `subIssuesSummary` (ambos
+// da feature sub_issues); PRs via closing references — tudo numa query só.
+// Orçamento de nós por página (100 issues): 100 × (20 labels + 5 assignees +
+// 10×20 fieldValues + 10 PRs × 10 reviewRequests) ≈ 33.500 — folgado no teto.
+const SNAPSHOT_QUERY = `
+query RepoSnapshot($owner: String!, $repo: String!, $cursor: String) {
+  repository(owner: $owner, name: $repo) {
+    issues(
+      first: 100
+      after: $cursor
+      states: [OPEN, CLOSED]
+      orderBy: { field: CREATED_AT, direction: DESC }
+    ) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        number
+        title
+        url
+        state
+        createdAt
+        labels(first: 20) { nodes { name } }
+        assignees(first: 5) { nodes { login name } }
+        milestone { number title }
+        parent { number }
+        subIssuesSummary { total completed }
+        projectItems(first: 10) {
+          nodes {
+            fieldValues(first: 20) {
+              nodes {
+                ... on ProjectV2ItemFieldSingleSelectValue {
+                  name
+                  field { ... on ProjectV2SingleSelectField { name } }
+                }
+              }
+            }
+          }
+        }
+        closedByPullRequestsReferences(first: 10, includeClosedPrs: true) {
+          nodes {
+            number
+            title
+            url
+            state
+            isDraft
+            reviewDecision
+            createdAt
+            reviewRequests(first: 10) {
+              nodes {
+                requestedReviewer {
+                  ... on User { login }
+                  ... on Team { name }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}`;
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function normalizeSnapshotIssue(node: any): GhSnapshotIssue {
+  // Todos os valores single-select de todos os boards da issue: campo → opção.
+  // O snapshotService decide qual campo é o de etapa (stageOptions do repo).
+  const projectFieldValues: Record<string, string> = {};
+  for (const item of node.projectItems?.nodes ?? []) {
+    for (const fv of item.fieldValues?.nodes ?? []) {
+      if (fv?.field?.name && typeof fv.name === 'string' && !(fv.field.name in projectFieldValues)) {
+        projectFieldValues[fv.field.name] = fv.name;
+      }
+    }
+  }
+
+  const prs: GhPullRequestRef[] = (node.closedByPullRequestsReferences?.nodes ?? []).map(
+    (pr: any) => ({
+      number: pr.number,
+      title: pr.title,
+      url: pr.url,
+      state: pr.state,
+      isDraft: Boolean(pr.isDraft),
+      reviewDecision: pr.reviewDecision ?? null,
+      reviewers: (pr.reviewRequests?.nodes ?? [])
+        .map((r: any) => r?.requestedReviewer?.login ?? r?.requestedReviewer?.name)
+        .filter((v: unknown): v is string => typeof v === 'string'),
+      createdAt: pr.createdAt,
+    }),
+  );
+
+  return {
+    number: node.number,
+    title: node.title,
+    url: node.url,
+    state: node.state,
+    createdAt: node.createdAt,
+    labels: (node.labels?.nodes ?? []).map((l: any) => l.name),
+    assignees: (node.assignees?.nodes ?? []).map((u: any) => ({ login: u.login, name: u.name })),
+    milestone: node.milestone
+      ? { number: node.milestone.number, title: node.milestone.title }
+      : null,
+    parentNumber: node.parent?.number ?? null,
+    subIssuesSummary: node.subIssuesSummary
+      ? { total: node.subIssuesSummary.total ?? 0, completed: node.subIssuesSummary.completed ?? 0 }
+      : null,
+    projectFieldValues,
+    prs,
+  };
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+// Busca TODAS as issues do repositório (flat, paginado). `maxPages` limita o
+// custo em repositórios muito grandes (10 páginas = 1.000 issues mais recentes).
+export async function fetchRepoIssuesSnapshot(
+  config: GitHubConfig,
+  maxPages = 10,
+): Promise<GhSnapshotIssue[]> {
+  const issues: GhSnapshotIssue[] = [];
+  let cursor: string | null = null;
+
+  for (let page = 0; page < maxPages; page += 1) {
+    const res = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Authorization: `bearer ${config.token}`,
+        'Content-Type': 'application/json',
+        'GraphQL-Features': 'sub_issues',
+      },
+      body: JSON.stringify({
+        query: SNAPSHOT_QUERY,
+        variables: { owner: config.owner, repo: config.repo, cursor },
+      }),
+    });
+    if (!res.ok) {
+      throw new UpstreamError(`GitHub API ${res.status}: ${await res.text()}`);
+    }
+
+    const json = (await res.json()) as {
+      errors?: { message: string; type?: string }[];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data?: { repository?: { issues?: { pageInfo?: any; nodes?: unknown[] } } | null };
+    };
+    if (json.errors) {
+      const msg = `GitHub GraphQL: ${json.errors.map((e) => e.message).join('; ')}`;
+      const notFound = json.errors.some(
+        (e) => e.type === 'NOT_FOUND' || /could not resolve to a repository/i.test(e.message),
+      );
+      throw notFound ? new NotFoundError(msg) : new UpstreamError(msg);
+    }
+    const repo = json.data?.repository;
+    if (!repo) {
+      throw new NotFoundError(`Repositório ${config.owner}/${config.repo} não encontrado.`);
+    }
+
+    issues.push(...(repo.issues?.nodes ?? []).map(normalizeSnapshotIssue));
+
+    const pageInfo = repo.issues?.pageInfo;
+    if (!pageInfo?.hasNextPage) break;
+    cursor = pageInfo.endCursor;
+  }
+
+  return issues;
+}
+
+// Lista os milestones do repositório (REST — o GraphQL não expõe contagens
+// abertas/fechadas de forma tão direta). Inclui abertos e fechados.
+export async function listMilestones(config: GitHubConfig): Promise<GhMilestoneSummary[]> {
+  const url = `https://api.github.com/repos/${config.owner}/${config.repo}/milestones?state=all&per_page=100`;
+  const res = await cachedGet(url, {
+    Authorization: `bearer ${config.token}`,
+    Accept: 'application/vnd.github+json',
+  });
+  if (res.status === 404) {
+    throw new NotFoundError(`Repositório ${config.owner}/${config.repo} não encontrado.`);
+  }
+  if (!res.ok) throw new UpstreamError(`GitHub Milestones API ${res.status}: ${await res.text()}`);
+  const json = JSON.parse(await res.text()) as Array<{
+    number?: number;
+    title?: string;
+    due_on?: string | null;
+    state?: string;
+    open_issues?: number;
+    closed_issues?: number;
+  }>;
+  return json.map((m) => ({
+    number: m.number ?? 0,
+    title: m.title ?? '',
+    dueOn: m.due_on ?? null,
+    state: m.state === 'closed' ? 'closed' : 'open',
+    openIssues: m.open_issues ?? 0,
+    closedIssues: m.closed_issues ?? 0,
+  }));
+}
+
 export async function fetchEpicPayload(config: GitHubConfig): Promise<GhEpicPayload> {
   const epic = await fetchIssueTree(config, config.issueNumber);
   const features = epic.subIssues ?? [];
@@ -398,6 +600,142 @@ export async function addLabel(config: GitHubConfig, number: number, label: stri
   if (!res.ok) throw new UpstreamError(`GitHub Issues API ${res.status}: ${await res.text()}`);
 }
 
+// Remove um label de uma issue (REST DELETE). Label ausente na issue (404 do
+// endpoint de label) é tratado como no-op — remoção é idempotente para o caller.
+// Usado no swap de prioridade (P0–P3).
+export async function removeLabel(
+  config: GitHubConfig,
+  number: number,
+  label: string,
+): Promise<void> {
+  const url = `https://api.github.com/repos/${config.owner}/${config.repo}/issues/${number}/labels/${encodeURIComponent(label)}`;
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `bearer ${config.token}`,
+      Accept: 'application/vnd.github+json',
+    },
+  });
+  if (res.status === 404) return; // issue ou label inexistente → nada a remover
+  if (!res.ok) throw new UpstreamError(`GitHub Issues API ${res.status}: ${await res.text()}`);
+}
+
+// Abre/fecha uma issue (REST PATCH state). Usado pelo "Delete" do Backlog
+// (RFC-003): apagar = fechar a issue (GitHub não deleta issues via API).
+export async function updateIssueState(
+  config: GitHubConfig,
+  number: number,
+  state: 'open' | 'closed',
+): Promise<void> {
+  const url = `https://api.github.com/repos/${config.owner}/${config.repo}/issues/${number}`;
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `bearer ${config.token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ state }),
+  });
+  if (res.status === 404) {
+    throw new NotFoundError(`Issue #${number} não encontrada em ${config.owner}/${config.repo}.`);
+  }
+  if (!res.ok) throw new UpstreamError(`GitHub Issues API ${res.status}: ${await res.text()}`);
+}
+
+// Cria um milestone no repositório (REST). Título duplicado → 422 do GitHub
+// (sobe como UpstreamError com a mensagem original).
+export async function createMilestone(
+  config: GitHubConfig,
+  input: { title: string; dueOn?: string | null; description?: string },
+): Promise<GhMilestoneSummary> {
+  const url = `https://api.github.com/repos/${config.owner}/${config.repo}/milestones`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `bearer ${config.token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      title: input.title,
+      ...(input.dueOn ? { due_on: input.dueOn } : {}),
+      ...(input.description ? { description: input.description } : {}),
+    }),
+  });
+  if (!res.ok) throw new UpstreamError(`GitHub Milestones API ${res.status}: ${await res.text()}`);
+  const json = (await res.json()) as {
+    number?: number;
+    title?: string;
+    due_on?: string | null;
+    state?: string;
+    open_issues?: number;
+    closed_issues?: number;
+  };
+  return {
+    number: json.number ?? 0,
+    title: json.title ?? '',
+    dueOn: json.due_on ?? null,
+    state: json.state === 'closed' ? 'closed' : 'open',
+    openIssues: json.open_issues ?? 0,
+    closedIssues: json.closed_issues ?? 0,
+  };
+}
+
+// Edita um milestone (REST PATCH): título, data-alvo (null limpa) e/ou estado.
+export async function updateMilestone(
+  config: GitHubConfig,
+  milestoneNumber: number,
+  patch: { title?: string; dueOn?: string | null; state?: 'open' | 'closed' },
+): Promise<void> {
+  const body: Record<string, unknown> = {};
+  if (patch.title !== undefined) body.title = patch.title;
+  if (patch.dueOn !== undefined) body.due_on = patch.dueOn;
+  if (patch.state !== undefined) body.state = patch.state;
+
+  const url = `https://api.github.com/repos/${config.owner}/${config.repo}/milestones/${milestoneNumber}`;
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `bearer ${config.token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 404) {
+    throw new NotFoundError(
+      `Milestone #${milestoneNumber} não encontrado em ${config.owner}/${config.repo}.`,
+    );
+  }
+  if (!res.ok) throw new UpstreamError(`GitHub Milestones API ${res.status}: ${await res.text()}`);
+}
+
+// Atribui/remove o milestone de uma issue (REST PATCH; null desatribui). É o
+// que sincroniza o Planning (RFC-003) com o campo Milestone do GitHub.
+export async function setIssueMilestone(
+  config: GitHubConfig,
+  issueNumber: number,
+  milestoneNumber: number | null,
+): Promise<void> {
+  const url = `https://api.github.com/repos/${config.owner}/${config.repo}/issues/${issueNumber}`;
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `bearer ${config.token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ milestone: milestoneNumber }),
+  });
+  if (res.status === 404) {
+    throw new NotFoundError(
+      `Issue #${issueNumber} não encontrada em ${config.owner}/${config.repo}.`,
+    );
+  }
+  if (!res.ok) throw new UpstreamError(`GitHub Issues API ${res.status}: ${await res.text()}`);
+}
+
 // Cria um comentário na issue (REST). Usado para registrar o prompt do usuário
 // no ciclo de refino de spec/plan.
 export async function createComment(
@@ -516,7 +854,19 @@ export async function fetchProjectFields(
     data?: Record<string, any>;
   };
   if (json.errors) {
-    throw new UpstreamError(`GitHub GraphQL: ${json.errors.map((e) => e.message).join('; ')}`);
+    const messages = json.errors.map((e) => e.message).join('; ');
+    // "Could not resolve to a ProjectV2" com token de instalação quase sempre é
+    // limitação do GitHub: Apps só acessam Projects v2 de ORGANIZAÇÃO (permissão
+    // organization_projects); projetos de conta pessoal ficam invisíveis.
+    if (/Could not resolve to a ProjectV2/i.test(messages)) {
+      throw new HttpError(
+        422,
+        project.kind === 'user'
+          ? `O projeto #${project.number} pertence a uma conta pessoal — GitHub Apps só acessam Projects v2 de organização. Use um projeto de organização (github.com/orgs/...) ou conecte o repositório sem projeto.`
+          : `Projects v2 #${project.number} de "${project.login}" inacessível — confirme que o GitHub App está instalado nessa organização e que a permissão de Projects foi aceita na instalação.`,
+      );
+    }
+    throw new UpstreamError(`GitHub GraphQL: ${messages}`);
   }
   const proj = json.data?.[ownerField]?.projectV2;
   if (!proj?.id) {
