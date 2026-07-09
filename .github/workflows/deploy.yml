@@ -26,8 +26,8 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -37,7 +37,7 @@ jobs:
         env:
           VITE_COGNITO_DOMAIN: ${{ vars.SPEC_WAVE_COGNITO_DOMAIN }}
           VITE_COGNITO_CLIENT_ID: ${{ vars.SPEC_WAVE_COGNITO_CLIENT_ID }}
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.SPEC_WAVE_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
