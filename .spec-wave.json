@@ -1,80 +1,80 @@
 {
-  "version": "0.5.7",
+  "version": "0.5.8",
   "owner": "astratech-net-br",
   "repo": "spec-wave-ui",
   "project": {
-    "title": "SpecWaveUI - Project",
-    "url": "https://github.com/orgs/astratech-net-br/projects/1",
-    "id": "PVT_kwDOEelBqs4BdDjv",
-    "number": 1,
+    "title": "spec-wave-ui — Spec Wave",
+    "url": "https://github.com/orgs/astratech-net-br/projects/2",
+    "id": "PVT_kwDOEelBqs4BdDu3",
+    "number": 2,
     "fields": {
       "Etapa": {
-        "id": "PVTSSF_lADOEelBqs4BdDjvzhXn55Y",
+        "id": "PVTSSF_lADOEelBqs4BdDu3zhXoDsw",
         "options": {
-          "📥 Backlog": "5c0cf64a",
-          "🎯 Priorizado": "8c92003b",
-          "📋 Spec": "061cd2c2",
-          "📋 Plan": "aede37a6",
-          "✅ Ready": "11d0f1bb",
-          "📋 Backlog Técnico": "36a2fbed",
-          "🚧 Desenvolvimento": "174234af",
-          "👀 Code Review": "9cbb6652",
-          "🧪 QA": "773773db",
-          "📋 Homologação": "ed51d36b",
-          "🚀 Deploy": "627b2d63",
-          "🎉 Done": "09fda953"
+          "📥 Backlog": "01b3a75f",
+          "🎯 Priorizado": "739eb7c1",
+          "📋 Spec": "ca7394e3",
+          "📋 Plan": "67b089e5",
+          "✅ Ready": "0a7b487b",
+          "📋 Backlog Técnico": "53cd89bd",
+          "🚧 Desenvolvimento": "c8451f71",
+          "👀 Code Review": "3a6ad424",
+          "🧪 QA": "0f0b730e",
+          "📋 Homologação": "90cf88ba",
+          "🚀 Deploy": "28755b54",
+          "🎉 Done": "a5cc1689"
         }
       },
       "Work Item Type": {
-        "id": "PVTSSF_lADOEelBqs4BdDjvzhXn56Q",
+        "id": "PVTSSF_lADOEelBqs4BdDu3zhXoDs0",
         "options": {
-          "Initiative": "27eaeead",
-          "Epic": "87969f8e",
-          "Feature": "de400712",
-          "Story": "2ac5c2a5",
-          "Task": "b333b1f4",
-          "Bug": "96bf8733",
-          "Spike": "8cc20c2d",
-          "RFC": "cda15777"
+          "Initiative": "285db5a4",
+          "Epic": "ca9ac37d",
+          "Feature": "d8f95932",
+          "Story": "f0211263",
+          "Task": "5d70eb54",
+          "Bug": "2adccb1f",
+          "Spike": "37f4545b",
+          "RFC": "3816752b"
         }
       },
       "Priority": {
-        "id": "PVTSSF_lADOEelBqs4BdDjvzhXn56U",
+        "id": "PVTSSF_lADOEelBqs4BdDu3zhXoDs4",
         "options": {
-          "P0": "0ac2f5e8",
-          "P1": "d2a879cd",
-          "P2": "5bde5691",
-          "P3": "048430cb"
+          "P0": "44bca67f",
+          "P1": "5236052f",
+          "P2": "88f499f5",
+          "P3": "375f5894"
         }
       },
       "Story Points": {
-        "id": "PVTSSF_lADOEelBqs4BdDjvzhXn56Y",
+        "id": "PVTSSF_lADOEelBqs4BdDu3zhXoDtw",
         "options": {
-          "1": "aceb06bb",
-          "2": "c32d0903",
-          "3": "91851cdd",
-          "5": "2e0e894f",
-          "8": "0e30e1e0",
-          "13": "60f19ef1",
-          "21": "3dd442aa"
+          "1": "4d764525",
+          "2": "04779410",
+          "3": "112ebe7d",
+          "5": "b9968c02",
+          "8": "ea7f084f",
+          "13": "d717bdd2",
+          "21": "a24ef388"
         }
       },
       "Area": {
-        "id": "PVTSSF_lADOEelBqs4BdDjvzhXn56c",
+        "id": "PVTSSF_lADOEelBqs4BdDu3zhXoDt0",
         "options": {
-          "Frontend": "4b532c6e",
-          "Backend": "1ebcbcb1",
-          "Mobile": "f9bb91db",
-          "Infra": "bbec565a",
-          "DevOps": "19711c9b",
-          "Data": "6366caa1"
+          "Frontend": "7ee848bd",
+          "Backend": "e63d70ef",
+          "Mobile": "f4ac5850",
+          "Infra": "54f87c6e",
+          "DevOps": "b1cb1575",
+          "Data": "ef386480"
         }
       }
     }
   },
   "ai": {
     "provider": "openrouter",
-    "model": "z-ai/glm-5.2"
+    "model": "deepseek/deepseek-chat-v3.1"
   },
-  "initializedAt": "2026-07-10T19:08:45.881Z"
+  "initializedAt": "2026-07-10T19:55:16.147Z"
 }
