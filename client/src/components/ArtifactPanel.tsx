@@ -139,31 +139,107 @@ export function ArtifactPanel({
     }
   };
 
-  // Aprova o plano: aplica o label spec-wave:ready. Só disponível na aba Plan com
-  // conteúdo salvo (plan.md existe).
+  // Aprova o plano: aplica o label spec-wave:ready (a Action validate.yml roda
+  // async e adiciona spec-wave:plan-approved). Mantém `approving` ligado — o
+  // useEffect abaixo faz poll até planApproved virar true e auto-atualiza a view.
   const onApprove = async () => {
     setError(null);
     setApproving(true);
     try {
       applyView(await approvePlan(repoId, featureNumber));
+      // NÃO desliga `approving` aqui: segue no poll até a Action concluir.
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-    } finally {
       setApproving(false);
     }
   };
 
+  // Poll após aprovar: espera a Action validate.yml aplicar spec-wave:plan-approved
+  // (planApproved=true). Aplica cada leitura; ao aprovar, o botão some sozinho
+  // (guard !planApproved) e vira "Criar User Storys". Espelha a fase 'waiting'.
+  useEffect(() => {
+    if (!approving) return;
+    let attempts = 0;
+    let stopped = false;
+    const tick = async () => {
+      attempts += 1;
+      try {
+        const view = await fetchWorkItem(repoId, 'feature', featureNumber);
+        if (stopped) return;
+        applyRef.current(view);
+        if (view.planApproved) {
+          stopped = true;
+          clearInterval(timer);
+          setApproving(false);
+          return;
+        }
+      } catch {
+        /* transitório: tenta de novo no próximo tick */
+      }
+      if (attempts >= POLL_MAX_ATTEMPTS && !stopped) {
+        stopped = true;
+        clearInterval(timer);
+        setError('A aprovação pela GitHub Action está demorando. Tente "Atualizar" em instantes.');
+        setApproving(false);
+      }
+    };
+    const timer = setInterval(tick, POLL_INTERVAL_MS);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [approving, repoId, featureNumber]);
+
+  // Decompõe a Feature: aplica spec-wave:decompose (a Action decompose.yml cria as
+  // Stories async). Mantém `decomposing` ligado — o poll abaixo espera as Stories
+  // aparecerem (children) e auto-atualiza a view.
   const onDecompose = async () => {
     setError(null);
     setDecomposing(true);
     try {
       applyView(await decomposeFeature(repoId, featureNumber));
+      // NÃO desliga `decomposing` aqui: segue no poll até a Action concluir.
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-    } finally {
       setDecomposing(false);
     }
   };
+
+  // Poll após decompor: espera a Action decompose.yml criar as Stories (children).
+  useEffect(() => {
+    if (!decomposing) return;
+    let attempts = 0;
+    let stopped = false;
+    const tick = async () => {
+      attempts += 1;
+      try {
+        const view = await fetchWorkItem(repoId, 'feature', featureNumber);
+        if (stopped) return;
+        applyRef.current(view);
+        if (view.children.length > 0) {
+          stopped = true;
+          clearInterval(timer);
+          setDecomposing(false);
+          return;
+        }
+      } catch {
+        /* transitório: tenta de novo no próximo tick */
+      }
+      if (attempts >= POLL_MAX_ATTEMPTS && !stopped) {
+        stopped = true;
+        clearInterval(timer);
+        setError(
+          'A decomposição pela GitHub Action está demorando. Tente "Atualizar" em instantes.',
+        );
+        setDecomposing(false);
+      }
+    };
+    const timer = setInterval(tick, POLL_INTERVAL_MS);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [decomposing, repoId, featureNumber]);
 
   // ----- Render -----
 
@@ -286,8 +362,15 @@ export function ArtifactPanel({
                   className="btn btn--accent"
                   onClick={onApprove}
                   disabled={approving}
+                  aria-busy={approving}
                 >
-                  {approving ? 'Aprovando…' : 'Aprovar Plano'}
+                  {approving ? (
+                    <>
+                      <span className="spinner" aria-hidden="true" /> Aprovando…
+                    </>
+                  ) : (
+                    'Aprovar Plano'
+                  )}
                 </button>
               )}
               {kind === 'plan' && planApproved && (
@@ -296,8 +379,15 @@ export function ArtifactPanel({
                   className="btn btn--accent"
                   onClick={onDecompose}
                   disabled={decomposing}
+                  aria-busy={decomposing}
                 >
-                  {decomposing ? 'Criando…' : 'Criar User Storys'}
+                  {decomposing ? (
+                    <>
+                      <span className="spinner" aria-hidden="true" /> Criando…
+                    </>
+                  ) : (
+                    'Criar User Storys'
+                  )}
                 </button>
               )}
             </div>

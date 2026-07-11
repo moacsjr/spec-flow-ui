@@ -836,6 +836,31 @@ button {
   }
 }
 
+/* Spinner inline para botões em processamento (ex.: "Aprovando…"). Usa
+   currentColor → combina com o texto do botão em qualquer variante. */
+.spinner {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  vertical-align: -0.1em;
+  margin-right: 0.2em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spinner-rotate 0.7s linear infinite;
+}
+
+@keyframes spinner-rotate {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    opacity: 0.55;
+  }
+}
+
 .feature-card__pct {
   width: 38px;
   text-align: right;
