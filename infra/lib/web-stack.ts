@@ -12,6 +12,7 @@ import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -91,8 +92,32 @@ export class WebStack extends cdk.Stack {
       ],
     });
 
+    // ---------- Domínio custom (ex.: spec-wave.astratech.net.br) ----------
+    // DNS na GoDaddy (externo ao Route53): o CDK gerencia o cert ACM e associa o
+    // domínio à distribution; os registros DNS são criados no painel da GoDaddy.
+    // O cert PRECISA estar em us-east-1 (escopo CloudFront) — o app já é us-east-1.
+    // Se já existe um cert (o domínio custom hoje já resolve p/ o CloudFront),
+    // informe o ARN em appCustomDomainCertArn para IMPORTAR e evitar re-validação.
+    const customDomain = this.node.tryGetContext('appCustomDomain') as string | undefined;
+    const customDomainCertArn = this.node.tryGetContext('appCustomDomainCertArn') as string | undefined;
+    let domainNames: string[] | undefined;
+    let certificate: acm.ICertificate | undefined;
+    if (customDomain) {
+      domainNames = [customDomain];
+      certificate = customDomainCertArn
+        ? acm.Certificate.fromCertificateArn(this, 'SiteCert', customDomainCertArn)
+        : new acm.Certificate(this, 'SiteCert', {
+            domainName: customDomain,
+            // Validação DNS: adicione o CNAME de validação na GoDaddy. O deploy
+            // fica pendente até o ACM validar (pode levar alguns minutos).
+            validation: acm.CertificateValidation.fromDns(),
+          });
+    }
+
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       webAclId: webAcl.attrArn,
+      domainNames,
+      certificate,
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(bucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -123,5 +148,16 @@ export class WebStack extends cdk.Stack {
       value: `https://${distribution.distributionDomainName}/`,
       description: 'URL do app — use como appUrl (contexto CDK) e Setup URL do GitHub App',
     });
+
+    if (customDomain) {
+      new cdk.CfnOutput(this, 'CustomDomainUrl', {
+        value: `https://${customDomain}/`,
+        description: 'URL do app no domínio custom',
+      });
+      new cdk.CfnOutput(this, 'CustomDomainCnameTarget', {
+        value: distribution.distributionDomainName,
+        description: 'Alvo do CNAME na GoDaddy: spec-wave.astratech.net.br -> este valor',
+      });
+    }
   }
 }

@@ -138,15 +138,21 @@ export class StatefulStack extends cdk.Stack {
 
     // Callback = raiz do app (CloudFront). Antes do primeiro deploy do WebStack
     // a URL não existe — o contexto appUrl é atualizado depois (ver README).
+    // A SPA monta redirect_uri = `${window.location.origin}/`, então TODO domínio
+    // por onde o app é servido precisa estar aqui (senão a Hosted UI do Cognito
+    // devolve "An error was encountered with the requested page."). Domínio custom
+    // (ex.: spec-wave.astratech.net.br) entra via contexto appCustomDomainUrl.
     const appUrl = (this.node.tryGetContext('appUrl') as string) || 'http://localhost:5173/';
+    const customDomainUrl = this.node.tryGetContext('appCustomDomainUrl') as string | undefined;
+    const oauthUrls = [appUrl, 'http://localhost:5173/', ...(customDomainUrl ? [customDomainUrl] : [])];
     this.userPoolClient = this.userPool.addClient('SpaClient', {
       generateSecret: false, // SPA pública: PKCE, sem client secret
       authFlows: { userSrp: true },
       oAuth: {
         flows: { authorizationCodeGrant: true },
         scopes: [cognito.OAuthScope.OPENID, cognito.OAuthScope.EMAIL],
-        callbackUrls: [appUrl, 'http://localhost:5173/'],
-        logoutUrls: [appUrl, 'http://localhost:5173/'],
+        callbackUrls: oauthUrls,
+        logoutUrls: oauthUrls,
       },
       idTokenValidity: cdk.Duration.hours(1),
       accessTokenValidity: cdk.Duration.hours(1),
