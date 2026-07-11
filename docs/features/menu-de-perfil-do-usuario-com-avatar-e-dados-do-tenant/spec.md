@@ -91,17 +91,20 @@ Cenário: Consistência multi-tenant
 - Componente de cabeçalho existente para integração do menu
 
 ## Externas
-- [TODO: requer esclarecimento do PO] Serviço de armazenamento de avatares (AWS S3, Google Cloud Storage, etc.)
-- [TODO: requer esclarecimento do PO] CDN para otimização de carregamento de imagens
+- Amazon S3 para armazenamento dos avatares dos usuários
+- Amazon CloudFront como CDN para distribuição otimizada das imagens
+- AWS IAM para gerenciamento seguro de permissões de acesso aos buckets
 
 # Requisitos Não-Funcionais
 ## Performance
 - O menu deve carregar em menos de 100ms após o login
-- O avatar deve ser carregado com lazy loading para não bloquear renderização
+- Os avatares devem ser servidos via CloudFront com cache de pelo menos 1 dia
 - O dropdown deve abrir/fechar com animação suave (max 300ms)
+- Latência máxima de 500ms para carregamento de avatares via CDN
 
 ## Segurança
-- Dados sensíveis não devem ser expostos no HTML (usar data attributes quando necessário)
+- Bucket S3 configurado com acesso privado por padrão
+- URLs de avatares devem ser assinadas e ter tempo de expiração
 - Validação de sessão deve ser feita a cada interação com o menu
 - Logout deve invalidar token JWT/refresh token adequadamente
 
@@ -110,3 +113,4 @@ Cenário: Consistência multi-tenant
 - O dropdown deve ser fechado ao clicar fora ou pressionar ESC
 - Deve ser totalmente acessível via teclado (tabindex, aria-labels)
 - Responsivo para diferentes tamanhos de tela
+- Avatares devem ter fallback visual durante carregamento
