@@ -104,6 +104,7 @@ const SNAPSHOT = {
       ],
     },
   ],
+  displayOrder: [],
 };
 
 async function mockApi(page: Page) {
@@ -121,9 +122,31 @@ test.describe('Workspaces por papel (RFC-003)', () => {
     await page.goto('/#/ws/pm/dashboard');
 
     await expect(page.locator('.ws-sidebar__role')).toHaveText('Product Manager');
-    await expect(page.locator('.ws-sidebar__link')).toHaveCount(5);
+    await expect(page.locator('.ws-sidebar__link')).toHaveCount(6);
     await expect(page.locator('.widget').first()).toBeVisible();
     await expect(page.locator('.ws-topbar__repo')).toHaveValue(REPO.id);
+  });
+
+  test('PM: project mostra estrutura em tabela e árvore', async ({ page }) => {
+    await mockApi(page);
+    await page.goto('/#/ws/pm/project');
+
+    // Tabela (default): uma linha por item do snapshot, ordenada por número.
+    await expect(page.locator('.proj-table tbody tr')).toHaveCount(4);
+    await expect(page.locator('.proj-table__id a').first()).toHaveText('#10');
+
+    // Árvore: #11 (com filhos #12/#13) + #10 sem pai → "Itens sem parent".
+    await page.getByRole('tab', { name: 'Árvore' }).click();
+    await expect(page.getByText('Itens sem parent')).toBeVisible();
+    await expect(page.locator('.proj-tree__node')).toHaveCount(4);
+
+    // Collapse: colapsar o nó raiz (#11) esconde os filhos (#12/#13).
+    await page.getByRole('button', { name: 'Colapsar' }).click();
+    await expect(page.locator('.proj-tree__node')).toHaveCount(2);
+
+    // Criar item de qualquer tipo: o form revela o select de tipo.
+    await page.getByRole('button', { name: '+ Novo item' }).click();
+    await expect(page.locator('.idea-form select').first()).toBeVisible();
   });
 
   test('PM: backlog exibe só itens sem prioridade', async ({ page }) => {

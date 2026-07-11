@@ -78,6 +78,31 @@ export async function deleteWorkItem(
   await request(itemBase(repoId, level, number), { method: 'DELETE' });
 }
 
+// Reparent (drag-and-drop da árvore na tela Project): define `parentNumber` como
+// pai de `childNumber`. O server valida a hierarquia permitida e atualiza a
+// sub-issue nativa. Encadeia chamadas ao GitHub → timeout maior.
+export async function reparentWorkItem(
+  repoId: string,
+  childNumber: number,
+  parentNumber: number,
+): Promise<void> {
+  await request(`/api/repositories/${repoId}/reparent`, {
+    method: 'POST',
+    payload: { childNumber, parentNumber },
+    timeoutMs: 30_000,
+  });
+}
+
+// Reorder (Shift-drag da árvore na tela Project): grava a ordem de exibição
+// custom (lista global de números). O server persiste no tenant e invalida o
+// snapshot; o caller faz `refresh()`.
+export async function reorderWorkItems(repoId: string, order: number[]): Promise<void> {
+  await request(`/api/repositories/${repoId}/reorder`, {
+    method: 'POST',
+    payload: { order },
+  });
+}
+
 // Move a etapa canônica no board (Start Story, aprovar/devolver UAT…).
 export async function setStage(
   repoId: string,

@@ -19,6 +19,7 @@ export const ROLE_LABELS: Record<WorkspaceRole, string> = {
 export const WORKSPACE_NAV: Record<WorkspaceRole, WorkspaceNavItem[]> = {
   pm: [
     { page: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { page: 'project', label: 'Project', icon: '🗂️' },
     { page: 'backlog', label: 'Backlog', icon: '📥' },
     { page: 'prioritization', label: 'Prioritization', icon: '🎯' },
     { page: 'planning', label: 'Planning', icon: '🗓️' },

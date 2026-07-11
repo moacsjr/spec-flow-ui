@@ -299,6 +299,36 @@ export async function markInstallationDeleted(installationId: number): Promise<v
   await putInstallation({ ...existing, status: 'deleted' });
 }
 
+// ---------- Ordem de exibição custom (tela Project) ----------
+// Lista global de números de issue por tenant/repo — a árvore ordena por ela.
+// App-privado (não vai para o GitHub). Auto-reconciliável: números ausentes são
+// ignorados na leitura; itens novos entram por número no client.
+// SK NÃO pode começar com "REPO#" — a listagem de repositórios usa
+// begins_with(SK, 'REPO#') e capturaria este item como um repo fantasma.
+const orderKey = (tenantId: string, repoId: string) => ({
+  PK: `TENANT#${tenantId}`,
+  SK: `ORDER#${repoId}`,
+});
+
+export async function getDisplayOrder(tenantId: string, repoId: string): Promise<number[]> {
+  const out = await doc().send(new GetCommand({ TableName: TABLE, Key: orderKey(tenantId, repoId) }));
+  const order = (out.Item as { order?: unknown } | undefined)?.order;
+  return Array.isArray(order) ? (order.filter((n) => typeof n === 'number') as number[]) : [];
+}
+
+export async function setDisplayOrder(
+  tenantId: string,
+  repoId: string,
+  order: number[],
+): Promise<void> {
+  await doc().send(
+    new PutCommand({
+      TableName: TABLE,
+      Item: { ...orderKey(tenantId, repoId), order },
+    }),
+  );
+}
+
 // ---------- State do onboarding (instalação do App) ----------
 
 export interface OnboardingState {

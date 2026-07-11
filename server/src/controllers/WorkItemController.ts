@@ -6,20 +6,25 @@
 import type { NextFunction, Request, Response } from 'express';
 import type {
   CreateFeatureRequest,
+  CreateWorkItemRequest,
   Level,
   Priority,
   StageName,
   WorkItemPatch,
+  WorkItemType,
 } from '@spec-flow/shared';
-import { STAGE_NAMES } from '@spec-flow/shared';
+import { STAGE_NAMES, WORK_ITEM_TYPES } from '@spec-flow/shared';
 import {
   createFeatureForRepository,
+  createWorkItemForRepository,
   deleteWorkItemForRepository,
   loadWorkItemForRepository,
   setPriorityForRepository,
   setStageForRepository,
+  setWorkItemParentForRepository,
   updateWorkItemForRepository,
 } from '../services/workItemService.ts';
+import { setDisplayOrderForRepository } from '../services/snapshotService.ts';
 import { HttpError } from '../lib/errors.ts';
 import { isValidRepoId } from '../lib/validation.ts';
 import { tenantOf } from '../middleware/auth.ts';
@@ -283,6 +288,138 @@ export async function createRepositoryFeature(
 
   try {
     res.status(201).json(await createFeatureForRepository(tenantOf(req).tenantId, repoId, epicNumber, input));
+  } catch (err) {
+    if (err instanceof HttpError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    next(err); // erro inesperado → handler central (500)
+  }
+}
+
+// POST /api/repositories/:id/workitems → cria um work item de qualquer tipo
+// (Initiative/Epic/Feature/Story/Task/Bug/Spike), opcionalmente como sub-issue
+// de `parentNumber`, e o adiciona ao board. Usado pela tela Project do PM.
+export async function createRepositoryWorkItem(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const repoId = req.params.id;
+  if (!isValidRepoId(repoId)) {
+    res.status(400).json({ error: `Repositório inválido: "${req.params.id}".` });
+    return;
+  }
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  if (typeof body.type !== 'string' || !WORK_ITEM_TYPES.includes(body.type as WorkItemType)) {
+    res.status(400).json({ error: `Tipo inválido. Use um de: ${WORK_ITEM_TYPES.join(', ')}.` });
+    return;
+  }
+  if (typeof body.title !== 'string' || body.title.trim().length === 0) {
+    res.status(400).json({ error: 'Informe o título do item.' });
+    return;
+  }
+  if (body.descriptionMdx !== undefined && typeof body.descriptionMdx !== 'string') {
+    res.status(400).json({ error: 'A descrição deve ser um texto.' });
+    return;
+  }
+  if (body.priority !== undefined && !PRIORITIES.includes(body.priority as string)) {
+    res.status(400).json({ error: `Prioridade inválida. Use uma de: ${PRIORITIES.join(', ')}.` });
+    return;
+  }
+  if (body.area !== undefined && !AREAS.includes(body.area as string)) {
+    res.status(400).json({ error: `Área inválida. Use uma de: ${AREAS.join(', ')}.` });
+    return;
+  }
+  let parentNumber: number | undefined;
+  if (body.parentNumber !== undefined && body.parentNumber !== null) {
+    parentNumber = Number(body.parentNumber);
+    if (!Number.isInteger(parentNumber) || parentNumber <= 0) {
+      res.status(400).json({ error: `Número do pai inválido: "${String(body.parentNumber)}".` });
+      return;
+    }
+  }
+
+  const input: CreateWorkItemRequest = {
+    type: body.type as WorkItemType,
+    title: body.title.trim(),
+  };
+  if (typeof body.descriptionMdx === 'string') input.descriptionMdx = body.descriptionMdx;
+  if (typeof body.priority === 'string') input.priority = body.priority;
+  if (typeof body.area === 'string') input.area = body.area;
+  if (parentNumber !== undefined) input.parentNumber = parentNumber;
+
+  try {
+    res.status(201).json(await createWorkItemForRepository(tenantOf(req).tenantId, repoId, input));
+  } catch (err) {
+    if (err instanceof HttpError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    next(err); // erro inesperado → handler central (500)
+  }
+}
+
+// POST /api/repositories/:id/reparent → define o pai (sub-issue nativa) de um
+// item, validando a hierarquia permitida. Usado no drag-and-drop da tela Project.
+export async function reparentWorkItem(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const repoId = req.params.id;
+  if (!isValidRepoId(repoId)) {
+    res.status(400).json({ error: `Repositório inválido: "${req.params.id}".` });
+    return;
+  }
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const childNumber = Number(body.childNumber);
+  const parentNumber = Number(body.parentNumber);
+  if (!Number.isInteger(childNumber) || childNumber <= 0) {
+    res.status(400).json({ error: 'childNumber inválido.' });
+    return;
+  }
+  if (!Number.isInteger(parentNumber) || parentNumber <= 0) {
+    res.status(400).json({ error: 'parentNumber inválido.' });
+    return;
+  }
+
+  try {
+    await setWorkItemParentForRepository(tenantOf(req).tenantId, repoId, childNumber, parentNumber);
+    res.status(204).end();
+  } catch (err) {
+    if (err instanceof HttpError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    next(err); // erro inesperado → handler central (500)
+  }
+}
+
+// POST /api/repositories/:id/reorder → grava a ordem de exibição custom (lista
+// global de números de issue). Usado no reorder por Shift-drag da tela Project.
+export async function reorderWorkItems(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const repoId = req.params.id;
+  if (!isValidRepoId(repoId)) {
+    res.status(400).json({ error: `Repositório inválido: "${req.params.id}".` });
+    return;
+  }
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  if (!Array.isArray(body.order) || !body.order.every((n) => typeof n === 'number')) {
+    res.status(400).json({ error: 'order inválido: esperado um array de números.' });
+    return;
+  }
+
+  try {
+    await setDisplayOrderForRepository(tenantOf(req).tenantId, repoId, body.order as number[]);
+    res.status(204).end();
   } catch (err) {
     if (err instanceof HttpError) {
       res.status(err.status).json({ error: err.message });

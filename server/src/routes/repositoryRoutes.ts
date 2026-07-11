@@ -11,8 +11,11 @@ import {
 } from '../controllers/RepositoryController.ts';
 import {
   createRepositoryFeature,
+  createRepositoryWorkItem,
   deleteRepositoryWorkItem,
   getRepositoryWorkItem,
+  reorderWorkItems,
+  reparentWorkItem,
   setWorkItemPriority,
   setWorkItemStage,
   updateRepositoryWorkItem,
@@ -86,6 +89,18 @@ repositoryRoutes.delete('/repositories/:id/workitems/:level/:number', deleteRepo
 
 // PATCH /api/repositories/:id/workitems/:level/:number → edita título/corpo da issue.
 repositoryRoutes.patch('/repositories/:id/workitems/:level/:number', updateRepositoryWorkItem);
+
+// POST /api/repositories/:id/workitems → cria um work item de qualquer tipo
+// (opcionalmente sub-issue de parentNumber) e o adiciona ao board — tela Project.
+repositoryRoutes.post('/repositories/:id/workitems', createRepositoryWorkItem);
+
+// POST /api/repositories/:id/reparent → define o pai de um item (drag-and-drop
+// da árvore), validando a hierarquia permitida.
+repositoryRoutes.post('/repositories/:id/reparent', reparentWorkItem);
+
+// POST /api/repositories/:id/reorder → grava a ordem de exibição custom
+// (reorder por Shift-drag da árvore).
+repositoryRoutes.post('/repositories/:id/reorder', reorderWorkItems);
 
 // POST /api/repositories/:id/workitems/epic/:number/features → cria uma Feature
 // sob o épico (issue [FEATURE] + vínculo de sub-issue + entrada no Projects v2).

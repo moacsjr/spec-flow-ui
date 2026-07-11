@@ -20,8 +20,11 @@ import { AREA_NAMES, stripTypePrefix } from '../github/adapter.ts';
 import { normalizeStage } from '../lib/status.ts';
 import {
   getCachedSnapshot,
+  invalidateSnapshot,
   setCachedSnapshot,
 } from '../lib/snapshotCache.ts';
+import { getDisplayOrder, setDisplayOrder } from '../db/dynamo.ts';
+import { HttpError } from '../lib/errors.ts';
 import {
   configForRepository,
   getRepositoryOr404,
@@ -165,6 +168,7 @@ export async function buildSnapshot(
       closedCount: m.closedIssues,
     })),
     items,
+    displayOrder: [], // preenchido por loadSnapshotForRepository (persistido no tenant)
   };
 }
 
@@ -181,10 +185,27 @@ export async function loadSnapshotForRepository(
   }
 
   const record = await getRepositoryOr404(tenantId, repoId);
-  const snapshot = await buildSnapshot(
-    await configForRepository(record),
-    toRepositoryDTO(record),
-  );
+  const [snapshot, displayOrder] = await Promise.all([
+    buildSnapshot(await configForRepository(record), toRepositoryDTO(record)),
+    getDisplayOrder(tenantId, repoId),
+  ]);
+  snapshot.displayOrder = displayOrder;
   setCachedSnapshot(tenantId, repoId, snapshot);
   return snapshot;
+}
+
+// Grava a ordem de exibição custom do repositório (tela Project) e invalida o
+// snapshot cacheado — a próxima leitura reflete a nova ordem. Best-effort de
+// validação: só inteiros positivos entram na lista.
+export async function setDisplayOrderForRepository(
+  tenantId: string,
+  repoId: string,
+  order: number[],
+): Promise<void> {
+  await getRepositoryOr404(tenantId, repoId); // 404 se o repo não for do tenant
+  if (!Array.isArray(order) || !order.every((n) => Number.isInteger(n) && n > 0)) {
+    throw new HttpError(400, 'Ordem inválida: esperado um array de números de issue.');
+  }
+  await setDisplayOrder(tenantId, repoId, order);
+  invalidateSnapshot(tenantId, repoId);
 }

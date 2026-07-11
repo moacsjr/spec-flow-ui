@@ -20,6 +20,7 @@ import { WorkspaceTopbar } from './WorkspaceTopbar';
 import type { WorkspacePageProps } from './types';
 
 import { PmDashboard } from './pm/PmDashboard';
+import { ProjectPage } from './pm/ProjectPage';
 import { BacklogPage } from './pm/BacklogPage';
 import { PrioritizationPage } from './pm/PrioritizationPage';
 import { PlanningPage } from './pm/PlanningPage';
@@ -43,6 +44,7 @@ import { DevProgressPage } from './dev/ProgressPage';
 const PAGES: Record<WorkspaceRole, Record<string, ComponentType<WorkspacePageProps>>> = {
   pm: {
     dashboard: PmDashboard,
+    project: ProjectPage,
     backlog: BacklogPage,
     prioritization: PrioritizationPage,
     planning: PlanningPage,

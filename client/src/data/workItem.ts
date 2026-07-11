@@ -5,7 +5,9 @@
 
 import type {
   ArtifactKind,
+  CreatedWorkItem,
   CreateFeatureRequest,
+  CreateWorkItemRequest,
   Level,
   WorkItemPatch,
   WorkItemView,
@@ -159,6 +161,25 @@ export async function createFeature(
     input,
     CREATE_FEATURE_TIMEOUT_MS,
   );
+}
+
+// Cria um work item de qualquer tipo (tela Project do PM). O server cria a issue
+// com o label de tipo, vincula ao parent (se houver) e adiciona ao board; o
+// caller faz `refresh()` do snapshot. Timeout estendido (encadeia chamadas ao GitHub).
+export async function createWorkItem(
+  repoId: string,
+  input: CreateWorkItemRequest,
+): Promise<CreatedWorkItem> {
+  const res = await apiFetch(`/api/repositories/${repoId}/workitems`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(input),
+    signal: AbortSignal.timeout(CREATE_FEATURE_TIMEOUT_MS),
+  });
+  if (!res.ok) {
+    throw new Error(await errorMessage(res));
+  }
+  return (await res.json()) as CreatedWorkItem;
 }
 
 // Refina o artefato: registra o prompt como comentário e devolve o texto gerado

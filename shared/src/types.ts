@@ -55,6 +55,74 @@ export interface CreateFeatureRequest {
   area?: string; // 'Frontend' | 'Backend' | 'Mobile' | 'Infra' | 'DevOps' | 'Data'
 }
 
+// Tipos de work item que a tela Project do PM permite criar (espelha o
+// `spec-wave issue --type`). A hierarquia natural é Initiative → Epic → Feature
+// → Story → Task; Bug/Spike entram em qualquer ponto via parentNumber.
+export type WorkItemType =
+  | 'initiative'
+  | 'epic'
+  | 'feature'
+  | 'story'
+  | 'task'
+  | 'bug'
+  | 'spike';
+export const WORK_ITEM_TYPES: WorkItemType[] = [
+  'initiative',
+  'epic',
+  'feature',
+  'story',
+  'task',
+  'bug',
+  'spike',
+];
+
+// Posição na hierarquia (Initiative → Epic → Feature → Story → Task). Bug e
+// Spike são folhas flexíveis (mesmo rank de Task): podem ser filhos de qualquer
+// nível acima, nunca pais de itens da cadeia.
+export const WORK_ITEM_RANK: Record<WorkItemType, number> = {
+  initiative: 0,
+  epic: 1,
+  feature: 2,
+  story: 3,
+  task: 4,
+  bug: 4,
+  spike: 4,
+};
+
+// Regra de reparent: um item só pode ser filho de um tipo estritamente acima
+// dele na hierarquia (rank do pai < rank do filho). Ex.: Task não pode ter
+// Story como filha; Epic não pode ter Initiative como filha.
+export function isAllowedParent(parentType: WorkItemType, childType: WorkItemType): boolean {
+  return WORK_ITEM_RANK[parentType] < WORK_ITEM_RANK[childType];
+}
+
+// POST /api/repositories/:id/reparent — define o pai (sub-issue nativa) de um item.
+export interface ReparentRequest {
+  childNumber: number;
+  parentNumber: number;
+}
+
+// POST /api/repositories/:id/reorder — grava a ordem de exibição custom (lista
+// global de números de issue) do repositório.
+export interface ReorderRequest {
+  order: number[];
+}
+
+// POST /api/repositories/:id/workitems — cria um work item de qualquer tipo,
+// opcionalmente como sub-issue de `parentNumber`, e o adiciona ao board.
+export interface CreateWorkItemRequest {
+  type: WorkItemType;
+  title: string;
+  descriptionMdx?: string;
+  priority?: string; // P0–P3
+  area?: string; // Frontend | Backend | Mobile | Infra | DevOps | Data
+  parentNumber?: number; // pai (sub-issue nativa); ausente/null = raiz
+}
+export interface CreatedWorkItem {
+  number: number;
+  url: string;
+}
+
 // Resumo de um épico na lista de épicos de um repositório (issues com label
 // [EPIC]). Leve — sem subárvore/progresso. Schema de GET /api/repositories/:id/epics.
 export interface EpicSummary {
@@ -241,4 +309,8 @@ export interface ProjectSnapshot {
   generatedAt: string; // ISO
   milestones: MilestoneSummary[];
   items: SnapshotItem[];
+  // Ordem de exibição custom (números de issue), persistida por tenant/repo. A
+  // árvore da tela Project ordena por este índice; itens ausentes caem para o
+  // fim (por número). Vazio = sem ordem custom (comportamento default).
+  displayOrder: number[];
 }

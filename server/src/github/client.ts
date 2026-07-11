@@ -581,6 +581,36 @@ export async function addSubIssue(
   }
 }
 
+// Reparent: define `parentNodeId` como pai de `childNodeId`, movendo-o do pai
+// atual se já houver (replaceParent). O GitHub rejeita ciclos. Usado no
+// drag-and-drop da árvore (tela Project).
+export async function setSubIssueParent(
+  config: GitHubConfig,
+  parentNodeId: string,
+  childNodeId: string,
+): Promise<void> {
+  const query = `
+    mutation SetSubIssueParent($issueId: ID!, $subIssueId: ID!) {
+      addSubIssue(input: { issueId: $issueId, subIssueId: $subIssueId, replaceParent: true }) {
+        subIssue { id number }
+      }
+    }`;
+  const res = await fetch(ENDPOINT, {
+    method: 'POST',
+    headers: {
+      Authorization: `bearer ${config.token}`,
+      'Content-Type': 'application/json',
+      'GraphQL-Features': 'sub_issues',
+    },
+    body: JSON.stringify({ query, variables: { issueId: parentNodeId, subIssueId: childNodeId } }),
+  });
+  if (!res.ok) throw new UpstreamError(`GitHub API ${res.status}: ${await res.text()}`);
+  const json = (await res.json()) as { errors?: { message: string }[] };
+  if (json.errors) {
+    throw new UpstreamError(`GitHub GraphQL: ${json.errors.map((e) => e.message).join('; ')}`);
+  }
+}
+
 // Adiciona um label a uma issue (REST). Idempotente no GitHub (re-adicionar é
 // no-op). Usado para disparar as Actions do spec-wave (spec-wave:spec/plan).
 export async function addLabel(config: GitHubConfig, number: number, label: string): Promise<void> {

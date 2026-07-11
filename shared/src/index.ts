@@ -16,6 +16,11 @@ export type {
   CreateRepositoryRequest,
   UpdateRepositoryRequest,
   CreateFeatureRequest,
+  WorkItemType,
+  CreateWorkItemRequest,
+  CreatedWorkItem,
+  ReparentRequest,
+  ReorderRequest,
   ArtifactKind,
   ArtifactRefineRequest,
   ArtifactRefineResponse,
@@ -28,4 +33,4 @@ export type {
   SnapshotItem,
   ProjectSnapshot,
 } from './types';
-export { STAGE_NAMES, PRIORITIES } from './types';
+export { STAGE_NAMES, PRIORITIES, WORK_ITEM_TYPES, WORK_ITEM_RANK, isAllowedParent } from './types';

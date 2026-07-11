@@ -712,3 +712,188 @@
     padding: 18px 16px 40px;
   }
 }
+
+/* ---------- Tela Project do PM (tabela + árvore) ---------- */
+
+.proj-viewtoggle {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.proj-form__row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.proj-form__row .idea-form__title {
+  flex: 1 1 240px;
+}
+
+/* Badge de tipo */
+.proj-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--surface-raised);
+  color: var(--text-2);
+}
+.proj-badge--initiative { background: rgba(176, 138, 209, 0.22); color: var(--av-purple); }
+.proj-badge--epic       { background: rgba(176, 138, 209, 0.16); color: var(--av-purple); }
+.proj-badge--feature    { background: var(--accent-soft); color: var(--accent-light); }
+.proj-badge--story      { background: rgba(111, 155, 209, 0.16); color: var(--av-blue); }
+.proj-badge--task       { background: rgba(123, 191, 158, 0.16); color: var(--av-green); }
+.proj-badge--bug        { background: rgba(209, 111, 111, 0.16); color: #d99; }
+.proj-badge--spike      { background: rgba(230, 164, 132, 0.16); color: var(--accent-light); }
+
+/* Tabela */
+.proj-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.proj-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.proj-table thead th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.proj-table tbody td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+  vertical-align: middle;
+}
+.proj-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.proj-table tbody tr:hover {
+  background: var(--surface);
+}
+.proj-table__id a {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+.proj-table__id a:hover {
+  color: var(--accent-light);
+}
+.proj-table__title {
+  color: var(--text);
+  min-width: 220px;
+}
+
+/* Árvore */
+.proj-tree__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.proj-tree__children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.proj-tree__hint {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+}
+.proj-tree__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  cursor: grab;
+  /* Sem Shift+seleção de texto: com texto selecionável, segurar Shift e arrastar
+     estende a seleção e o navegador NÃO inicia o drag (quebra o reorder). */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.proj-tree__row:active {
+  cursor: grabbing;
+}
+.proj-tree__node:hover > .proj-tree__row {
+  background: var(--surface);
+}
+.proj-tree__grip {
+  color: var(--text-ghost);
+  font-size: 12px;
+  cursor: grab;
+  user-select: none;
+}
+/* Chevron de expandir/colapsar (largura fixa alinha os itens sem filhos). */
+.proj-tree__toggle {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+.proj-tree__toggle:hover {
+  color: var(--text);
+}
+.proj-tree__toggle--leaf {
+  cursor: default;
+}
+.proj-tree__row--dragging {
+  opacity: 0.45;
+}
+/* Reparent: alvo válido destacado (soltar cria o vínculo de pai). */
+.proj-tree__row--dropok {
+  background: var(--accent-soft);
+  outline: 1px dashed var(--accent-border);
+  outline-offset: -1px;
+}
+/* Reorder (Shift): linha de inserção antes/depois do alvo — visual distinto do
+   reparent (não é "virar filho", é "posicionar entre irmãos"). */
+.proj-tree__row--insert-before {
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}
+.proj-tree__row--insert-after {
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+}
+.proj-tree__id {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  font-size: 13px;
+}
+.proj-tree__id:hover {
+  color: var(--accent-light);
+}
+.proj-tree__title {
+  color: var(--text);
+  flex: 1 1 auto;
+}
+.proj-tree__stage,
+.proj-tree__prio,
+.proj-tree__closed {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.proj-tree__prio {
+  color: var(--accent-light);
+}
+.proj-tree__closed {
+  color: var(--text-faint);
+}

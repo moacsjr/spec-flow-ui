@@ -3,21 +3,25 @@
 // recebida (montada a partir da linha do SQLite); o token vive só no servidor.
 
 import type {
+  CreatedWorkItem,
   CreateFeatureRequest,
+  CreateWorkItemRequest,
   EpicSummary,
   Level,
   Priority,
   RepositoryEpics,
   StageName,
   WorkItemPatch,
+  WorkItemType,
   WorkItemView,
 } from '@spec-flow/shared';
-import { PRIORITIES } from '@spec-flow/shared';
+import { isAllowedParent, PRIORITIES, WORK_ITEM_TYPES } from '@spec-flow/shared';
 import {
   addLabel,
   addProjectItem,
   addSubIssue,
   createIssue,
+  setSubIssueParent,
   fetchEpicPayload,
   fetchEpicSummaries,
   fetchFileContent,
@@ -279,6 +283,160 @@ export async function createFeatureForRepository(
 
   invalidateSnapshot(tenantId, id);
   return loadWorkItem(config, 'epic', epicNumber);
+}
+
+// --- Criação genérica de work item (tela Project do PM) ---
+
+// Tipo → label de tipo do spec-wave e opção do campo "Work Item Type" no board.
+const TYPE_LABEL: Record<WorkItemType, string> = {
+  initiative: '[INITIATIVE]',
+  epic: '[EPIC]',
+  feature: '[FEATURE]',
+  story: '[STORY]',
+  task: '[TASK]',
+  bug: '[BUG]',
+  spike: '[SPIKE]',
+};
+const TYPE_BOARD_OPTION: Record<WorkItemType, string> = {
+  initiative: 'Initiative',
+  epic: 'Epic',
+  feature: 'Feature',
+  story: 'Story',
+  task: 'Task',
+  bug: 'Bug',
+  spike: 'Spike',
+};
+
+// Corpo padrão (mesmo shape do CLI): referência ao pai (que o parentFromBody
+// reconhece p/ o breadcrumb) + descrição + bloco de metadados. Pode ser vazio.
+function buildWorkItemBody(
+  input: CreateWorkItemRequest,
+  parent: { number: number; title: string } | null,
+): string {
+  const parts: string[] = [];
+  if (parent) parts.push(`**Parent:** #${parent.number} — ${parent.title}`);
+  const desc = (input.descriptionMdx ?? '').trim();
+  if (desc) parts.push(desc);
+  const meta: string[] = [];
+  if (input.area) meta.push(`- **Área:** ${input.area}`);
+  if (input.priority) meta.push(`- **Prioridade:** ${input.priority}`);
+  if (meta.length) parts.push(`## Metadados\n${meta.join('\n')}`);
+  return parts.join('\n\n');
+}
+
+// Board: adiciona ao Projects v2 e define Etapa (📥 Backlog), Work Item Type e,
+// quando informados, Priority/Area. Best-effort (não derruba a criação).
+async function addWorkItemToBoard(
+  config: GitHubConfig,
+  contentNodeId: string,
+  type: WorkItemType,
+  input: CreateWorkItemRequest,
+): Promise<void> {
+  const project = config.project;
+  if (!project) return; // repositório sem Projects v2 configurado
+  const itemId = await addProjectItem(config, project.projectId, contentNodeId);
+
+  const backlog = Object.entries(project.stageOptions).find(([name]) => /backlog/i.test(name));
+  if (backlog) {
+    await moveProjectStage(config, project.projectId, itemId, project.etapaFieldId, backlog[1]);
+  } else {
+    logger.warn(`Projeto ${config.owner}/${config.repo} sem etapa "Backlog" para o novo item.`);
+  }
+
+  await setBoardSingleSelect(config, project.projectId, itemId, 'Work Item Type', TYPE_BOARD_OPTION[type]);
+  if (input.priority) {
+    await setBoardSingleSelect(config, project.projectId, itemId, 'Priority', input.priority);
+  }
+  if (input.area) {
+    await setBoardSingleSelect(config, project.projectId, itemId, 'Area', input.area);
+  }
+}
+
+// Cria um work item de QUALQUER tipo: issue com label de tipo (+ prefixo no
+// título), vínculo nativo de sub-issue quando há parentNumber e adição ao
+// Projects v2 (best-effort). Invalida o snapshot; devolve número + URL.
+export async function createWorkItemForRepository(
+  tenantId: string,
+  id: string,
+  input: CreateWorkItemRequest,
+): Promise<CreatedWorkItem> {
+  const config = await configForRepository(await getRepositoryOr404(tenantId, id));
+  const type = input.type;
+
+  const labels = [TYPE_LABEL[type]];
+  if (input.priority) labels.push(input.priority);
+  if (input.area) labels.push(input.area);
+
+  // Node id + título do pai (para o vínculo e a referência no corpo).
+  let parent: { number: number; title: string; nodeId: string } | null = null;
+  if (input.parentNumber) {
+    const ref = await fetchIssueRef(config, input.parentNumber);
+    parent = { number: input.parentNumber, title: stripTypePrefix(ref.title), nodeId: ref.nodeId };
+  }
+
+  const created = await createIssue(config, {
+    title: `${TYPE_LABEL[type]} ${input.title.trim()}`,
+    body: buildWorkItemBody(input, parent),
+    labels,
+  });
+
+  // Vínculo nativo de sub-issue: sem ele o filho não aparece sob o pai.
+  if (parent) {
+    await addSubIssue(config, parent.nodeId, created.nodeId);
+  }
+
+  await addWorkItemToBoard(config, created.nodeId, type, input).catch((err) => {
+    logger.warn(
+      `Issue #${created.number} criada, mas falhou ao configurar o board: ${(err as Error).message}`,
+    );
+  });
+
+  invalidateSnapshot(tenantId, id);
+  return {
+    number: created.number,
+    url: `https://github.com/${config.owner}/${config.repo}/issues/${created.number}`,
+  };
+}
+
+// Tipo do work item a partir do prefixo do título ("[TASK] …" → 'task').
+function typeFromTitle(title: string): WorkItemType | null {
+  const m = title.match(/^\s*\[([A-Z]+)\]/);
+  const t = m?.[1]?.toLowerCase();
+  return t && (WORK_ITEM_TYPES as string[]).includes(t) ? (t as WorkItemType) : null;
+}
+
+// Reparent (drag-and-drop da árvore): define `parentNumber` como pai de
+// `childNumber` via sub-issue nativa, validando a hierarquia permitida. Os tipos
+// vêm do prefixo do título das issues. O GitHub rejeita ciclos.
+export async function setWorkItemParentForRepository(
+  tenantId: string,
+  id: string,
+  childNumber: number,
+  parentNumber: number,
+): Promise<void> {
+  if (childNumber === parentNumber) {
+    throw new HttpError(400, 'Um item não pode ser pai de si mesmo.');
+  }
+  const config = await configForRepository(await getRepositoryOr404(tenantId, id));
+
+  const [child, parent] = await Promise.all([
+    fetchIssueRef(config, childNumber),
+    fetchIssueRef(config, parentNumber),
+  ]);
+  const childType = typeFromTitle(child.title);
+  const parentType = typeFromTitle(parent.title);
+  if (!childType || !parentType) {
+    throw new HttpError(400, 'Não foi possível determinar o tipo dos itens (prefixo ausente).');
+  }
+  if (!isAllowedParent(parentType, childType)) {
+    throw new HttpError(
+      422,
+      `Hierarquia não permitida: ${parentType} não pode ser pai de ${childType}.`,
+    );
+  }
+
+  await setSubIssueParent(config, parent.nodeId, child.nodeId);
+  invalidateSnapshot(tenantId, id);
 }
 
 // --- Mutações de workspace (RFC-003) ---
