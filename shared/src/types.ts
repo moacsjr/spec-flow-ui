@@ -197,6 +197,8 @@ export interface WorkItemView {
   specMdx?: string | null; // só Feature: docs/features/<slug>/spec.md; null = sem aba Spec
   planMdx?: string | null; // só Feature: docs/features/<slug>/plan.md; null = sem aba Plan
   planApproved?: boolean; // só Feature: true se label spec-wave:plan-approved presente
+  devStatus?: Status; // só Story: status do board normalizado (todo/prog/done)
+  devAgentRequested?: boolean; // só Story: true se label spec-wave:dev-agent presente
   headerPct: number; // % grande do painel de progresso
   progressLabel: string; // "Progresso do épico" / "da feature" / "da story"
   childrenLabel: string; // "Features" | "Stories" | "Tasks"

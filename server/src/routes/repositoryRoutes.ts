@@ -18,6 +18,7 @@ import {
   reparentWorkItem,
   setWorkItemPriority,
   setWorkItemStage,
+  startStoryDevelopment,
   updateRepositoryWorkItem,
 } from '../controllers/WorkItemController.ts';
 import {
@@ -72,6 +73,13 @@ repositoryRoutes.patch('/repositories/:id/milestones/:milestoneNumber', patchRep
 // PUT /api/repositories/:id/workitems/story/:number/milestone → atribui/remove
 // o milestone de uma Story (só Stories entram em milestones — RFC-003).
 repositoryRoutes.put('/repositories/:id/workitems/story/:number/milestone', putStoryMilestone);
+
+// POST /api/repositories/:id/workitems/story/:number/start-development → aplica
+// o label spec-wave:dev-agent na Story (CTA "Iniciar Desenvolvimento").
+repositoryRoutes.post(
+  '/repositories/:id/workitems/story/:number/start-development',
+  startStoryDevelopment,
+);
 
 // GET /api/repositories/:id/workitems/:level/:number → WorkItemView do repo.
 repositoryRoutes.get('/repositories/:id/workitems/:level/:number', getRepositoryWorkItem);

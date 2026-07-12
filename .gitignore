@@ -9,6 +9,10 @@ dist-ssr
 *.log
 .envrc
 
+# spec-wave: contexto de implementação gerado por `spec-wave implement`
+# (o .spec-wave.json de config, sem barra, continua versionado)
+.spec-wave/
+
 # Playwright
 playwright-report
 test-results

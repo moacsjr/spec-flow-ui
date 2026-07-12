@@ -76,5 +76,8 @@
     "provider": "openrouter",
     "model": "deepseek/deepseek-chat-v3.1"
   },
-  "initializedAt": "2026-07-10T19:55:16.147Z"
+  "initializedAt": "2026-07-10T19:55:16.147Z",
+  "specKit": {
+    "command": "claude -p \"Você é um agente de desenvolvimento autônomo. Leia o arquivo de contexto {tasksFile} e implemente a Story #{issue} e todas as suas Tasks exatamente conforme as instruções nele. Antes de finalizar, rode o typecheck/build e os testes pertinentes e garanta que o projeto compila.\" --allowed-tools Read Edit Write MultiEdit Bash Grep Glob TodoWrite"
+  }
 }

@@ -18,6 +18,12 @@ type State =
   | { phase: 'error'; message: string }
   | { phase: 'ready'; view: WorkItemView };
 
+// Auto-refresh da Story enquanto o dev-agent trabalha. Cadência de 1 min: cada
+// tick recarrega a issue via GraphQL do GitHub — intervalos curtos estouram o
+// rate limit da API. Teto de 30 tentativas ≈ 30 min de auto-refresh.
+const STORY_POLL_INTERVAL_MS = 60_000;
+const STORY_POLL_MAX_ATTEMPTS = 30;
+
 interface WorkItemScreenProps {
   repoId: string;
   level: Level;
@@ -70,6 +76,41 @@ export function WorkItemScreen({ repoId, level, number }: WorkItemScreenProps) {
     [repoId, number],
   );
 
+  // Story "em voo" pelo dev-agent: label spec-wave:dev-agent aplicado (aguardando)
+  // ou já "Em andamento", e ainda não concluída. Enquanto isso, faz auto-refresh.
+  const activeStory =
+    state.phase === 'ready' &&
+    state.view.level === 'story' &&
+    state.view.devStatus !== 'done' &&
+    (state.view.devStatus === 'prog' || state.view.devAgentRequested === true);
+
+  // Auto-refresh enquanto o dev-agent trabalha: re-busca a view para refletir —
+  // sem refresh manual — o progresso das Tasks (barras animadas) e a transição da
+  // própria Story (Aguardando → Em andamento). Para ao concluir (devStatus 'done'),
+  // ao sair da rota, ou após o teto de tentativas.
+  useEffect(() => {
+    if (!activeStory) return;
+    let attempts = 0;
+    let stopped = false;
+    const timer = setInterval(async () => {
+      attempts += 1;
+      try {
+        const fresh = await fetchWorkItem(repoId, level, number);
+        if (!stopped) setState({ phase: 'ready', view: fresh });
+      } catch {
+        /* transitório: tenta de novo no próximo tick */
+      }
+      if (attempts >= STORY_POLL_MAX_ATTEMPTS && !stopped) {
+        stopped = true;
+        clearInterval(timer);
+      }
+    }, STORY_POLL_INTERVAL_MS);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [activeStory, repoId, level, number]);
+
   if (state.phase === 'loading') {
     return <LoadingState />;
   }
@@ -106,7 +147,13 @@ export function WorkItemScreen({ repoId, level, number }: WorkItemScreenProps) {
     <>
       <TopBar breadcrumb={breadcrumb} owner={view.owner} />
       <main className="page">
-        <Hero view={view} onSave={handleSave} />
+        <Hero
+          view={view}
+          repoId={repoId}
+          number={number}
+          applyView={applyView}
+          onSave={handleSave}
+        />
         <div className="body-grid">
           <Description
             level={view.level}

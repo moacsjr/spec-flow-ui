@@ -25,17 +25,24 @@ function isClosed(issue: GhIssue): boolean {
   return String(issue.state).toUpperCase() === 'CLOSED';
 }
 
-// Status de uma Task (folha). Diferente de Feature/Story, ela não tem progresso
-// parcial: é binária no `state` (closed → done), mas o GitHub Projects v2 ainda
-// expõe um terceiro estado, "Em andamento", no campo Status — que o open/closed
-// não distingue de "A fazer". Por isso consultamos `projectStatus`. Mapeamos os
-// rótulos do board (PT/EN) para os 3 status do domínio.
-function leafStatus(issue: GhIssue): Status {
+// Status do campo "Status" do Projects v2 normalizado nos 3 estados do domínio.
+// Issue fechada → done; senão lê `projectStatus` (rótulos PT/EN do board);
+// ausente/desconhecido → todo. Base tanto do status da folha quanto do "Iniciar
+// Desenvolvimento" da Story.
+function boardStatus(issue: GhIssue): Status {
   if (isClosed(issue)) return 'done';
   const status = (issue.projectStatus ?? '').toLowerCase();
   if (/progress|andamento|doing|review|wip/.test(status)) return 'prog';
   if (/done|conclu/.test(status)) return 'done';
   return 'todo';
+}
+
+// Status de uma Task (folha). Diferente de Feature/Story, ela não tem progresso
+// parcial: é binária no `state` (closed → done), mas o GitHub Projects v2 ainda
+// expõe um terceiro estado, "Em andamento", no campo Status — que o open/closed
+// não distingue de "A fazer". Por isso reusa o boardStatus.
+function leafStatus(issue: GhIssue): Status {
+  return boardStatus(issue);
 }
 
 // pct sintético da folha, coerente com seu status — só alimenta a legenda do
@@ -297,6 +304,8 @@ export function adaptStory(issue: GhIssue, ctx: AdaptContext = {}): WorkItemView
     breadcrumb,
     meta,
     descriptionMdx: issue.body || '',
+    devStatus: boardStatus(issue),
+    devAgentRequested: labelNames(issue).includes('spec-wave:dev-agent'),
     headerPct: pct,
     progressLabel: 'Progresso da story',
     childrenLabel: 'Tasks',

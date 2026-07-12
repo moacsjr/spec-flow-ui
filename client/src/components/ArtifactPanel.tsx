@@ -39,8 +39,10 @@ type Phase =
   | { t: 'review'; draft: string };
 
 const LABEL: Record<ArtifactKind, string> = { spec: 'Spec', plan: 'Plan' };
-const POLL_INTERVAL_MS = 3_000;
-const POLL_MAX_ATTEMPTS = 40; // ~2 min aguardando a Action
+// Cadência de 1 min: cada tick recarrega a issue via GraphQL do GitHub — intervalos
+// curtos estouram o rate limit da API. Teto de 10 tentativas ≈ 10 min de espera.
+const POLL_INTERVAL_MS = 60_000;
+const POLL_MAX_ATTEMPTS = 10;
 
 export function ArtifactPanel({
   kind,

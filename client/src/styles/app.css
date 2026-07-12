@@ -285,6 +285,40 @@ button {
   color: var(--accent);
 }
 
+/* CTA principal da Story View (dentro do card de progresso). */
+.progress-panel__cta {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-strong);
+}
+
+.dev-cta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Botão "Iniciar Desenvolvimento": ocupa a largura do card (CTA primária). */
+.dev-cta__btn {
+  width: 100%;
+  justify-content: center;
+}
+
+/* "Aguardando Agente IA": label discreta com spinner. */
+.dev-cta__waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.dev-cta__hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .track {
   position: relative;
   height: 9px;

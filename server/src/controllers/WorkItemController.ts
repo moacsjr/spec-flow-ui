@@ -22,6 +22,7 @@ import {
   setPriorityForRepository,
   setStageForRepository,
   setWorkItemParentForRepository,
+  startDevelopmentForRepository,
   updateWorkItemForRepository,
 } from '../services/workItemService.ts';
 import { setDisplayOrderForRepository } from '../services/snapshotService.ts';
@@ -239,6 +240,36 @@ export async function setWorkItemStage(
       return;
     }
     next(err);
+  }
+}
+
+// POST /api/repositories/:id/workitems/story/:number/start-development — aplica
+// o label spec-wave:dev-agent na Story (CTA "Iniciar Desenvolvimento" da Story
+// View). Devolve o WorkItemView recarregado (devAgentRequested=true).
+export async function startStoryDevelopment(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const repoId = req.params.id;
+  if (!isValidRepoId(repoId)) {
+    res.status(400).json({ error: `Repositório inválido: "${req.params.id}".` });
+    return;
+  }
+  const n = Number(req.params.number);
+  if (!Number.isInteger(n) || n <= 0) {
+    res.status(400).json({ error: `Número inválido: "${req.params.number}".` });
+    return;
+  }
+
+  try {
+    res.json(await startDevelopmentForRepository(tenantOf(req).tenantId, repoId, n));
+  } catch (err) {
+    if (err instanceof HttpError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    next(err); // erro inesperado → handler central (500)
   }
 }
 

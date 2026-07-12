@@ -1,11 +1,15 @@
 import type { MetaField, WorkItemPatch, WorkItemView } from '@spec-flow/shared';
 import { Avatar } from './Avatar';
 import { ProgressPanel } from './ProgressPanel';
+import { StoryDevAction } from './StoryDevAction';
 import { EditButton, EditError, EditActions } from './EditControls';
 import { useInlineEdit } from '../hooks/useInlineEdit';
 
 interface HeroProps {
   view: WorkItemView;
+  repoId: string;
+  number: number;
+  applyView: (view: WorkItemView) => void;
   onSave?: (patch: WorkItemPatch) => Promise<void>;
 }
 
@@ -36,9 +40,15 @@ function MetaValue({ field }: { field: MetaField }) {
   return <>{field.value}</>;
 }
 
-export function Hero({ view, onSave }: HeroProps) {
+export function Hero({ view, repoId, number, applyView, onSave }: HeroProps) {
   const title = useInlineEdit(view.title, (draft) => ({ title: draft.trim() }), onSave);
   const titleValid = title.draft.trim().length > 0;
+
+  // Story View: CTA "Iniciar Desenvolvimento" dentro do card de progresso.
+  const devCta =
+    view.level === 'story' ? (
+      <StoryDevAction repoId={repoId} number={number} view={view} applyView={applyView} />
+    ) : undefined;
 
   return (
     <section className="hero">
@@ -91,7 +101,12 @@ export function Hero({ view, onSave }: HeroProps) {
         </div>
       </div>
 
-      <ProgressPanel pct={view.headerPct} items={view.children} label={view.progressLabel} />
+      <ProgressPanel
+        pct={view.headerPct}
+        items={view.children}
+        label={view.progressLabel}
+        cta={devCta}
+      />
     </section>
   );
 }

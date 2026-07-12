@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { ChildItem } from '@spec-flow/shared';
 import { STATUS_MAP, legendCounts } from '../lib/status';
 import { ProgressBar } from './ProgressBar';
@@ -6,9 +7,10 @@ interface ProgressPanelProps {
   pct: number; // % grande (cabeçalho); calculado pelo adapter conforme o nível
   items: ChildItem[]; // filhos, para a legenda
   label: string; // "Progresso do épico" / "da feature" / "da story"
+  cta?: ReactNode; // CTA principal opcional (Story View: "Iniciar Desenvolvimento")
 }
 
-export function ProgressPanel({ pct, items, label }: ProgressPanelProps) {
+export function ProgressPanel({ pct, items, label, cta }: ProgressPanelProps) {
   const legend = legendCounts(items);
 
   const rows = [
@@ -35,6 +37,8 @@ export function ProgressPanel({ pct, items, label }: ProgressPanelProps) {
           </div>
         ))}
       </div>
+
+      {cta && <div className="progress-panel__cta">{cta}</div>}
     </aside>
   );
 }

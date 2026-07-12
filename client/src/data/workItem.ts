@@ -158,6 +158,16 @@ export async function approvePlan(repoId: string, number: number): Promise<WorkI
   );
 }
 
+// Inicia desenvolvimento de uma Story: aplica o label spec-wave:dev-agent
+// (sinaliza o agente de IA) e devolve o WorkItemView recarregado.
+export async function startDevelopment(repoId: string, number: number): Promise<WorkItemView> {
+  return postForView(
+    `/api/repositories/${repoId}/workitems/story/${number}/start-development`,
+    {},
+    REQUEST_TIMEOUT_MS,
+  );
+}
+
 // Inicia decomposição: aplica spec-wave:decompose (dispara a Action).
 export async function decomposeFeature(repoId: string, number: number): Promise<WorkItemView> {
   return postForView(

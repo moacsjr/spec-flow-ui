@@ -478,6 +478,24 @@ export async function setPriorityForRepository(
   invalidateSnapshot(tenantId, id);
 }
 
+// Label que sinaliza ao agente de IA que a Story deve entrar em desenvolvimento.
+const DEV_AGENT_LABEL = 'spec-wave:dev-agent';
+
+// "Iniciar Desenvolvimento" (Story View): aplica o label spec-wave:dev-agent na
+// Story — o agente de IA observa esse label e assume o desenvolvimento. Idempotente
+// (addLabel não duplica). Devolve o WorkItemView recarregado (já com
+// devAgentRequested=true) para a UI trocar o CTA por "Aguardando Agente IA".
+export async function startDevelopmentForRepository(
+  tenantId: string,
+  id: string,
+  number: number,
+): Promise<WorkItemView> {
+  const config = await configForRepository(await getRepositoryOr404(tenantId, id));
+  await addLabel(config, number, DEV_AGENT_LABEL);
+  invalidateSnapshot(tenantId, id);
+  return loadWorkItem(config, 'story', number);
+}
+
 // "Delete" do Backlog (RFC-003): fecha a issue (a API do GitHub não deleta
 // issues). Invalida o snapshot.
 export async function deleteWorkItemForRepository(
