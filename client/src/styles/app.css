@@ -312,6 +312,41 @@ button {
   outline: none;
 }
 
+.profile-dropdown__logout:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+/* Spinner do estado de logout em andamento (Task #76). */
+.profile-dropdown__spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: profile-dropdown-spin 0.6s linear infinite;
+}
+
+@keyframes profile-dropdown-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-dropdown__spinner {
+    animation-duration: 1.5s;
+  }
+}
+
+/* Mensagem de erro do logout (Task #77) — inline, sem fechar o dropdown. */
+.profile-dropdown__error {
+  margin: 6px 4px 2px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--danger, #c00);
+}
+
 .profile-dropdown__item:focus-visible {
   outline: 2px solid var(--av-blue);
   outline-offset: -2px;

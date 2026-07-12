@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { authEnabled, getIdToken } from '../auth/cognito';
+import { useCallback, useEffect, useState } from 'react';
+import { authEnabled, clearLocalSession, getIdToken, revokeSession } from '../auth/cognito';
 
 // Estado da sessão do usuário para a UI (Story #66 / Task #69).
 //
@@ -16,6 +16,14 @@ export interface SessionUser {
 export interface Session {
   authenticated: boolean;
   user: SessionUser | null;
+  /**
+   * Encerra a sessão (Story #74): revoga o refresh token no Cognido (invalidação
+   * server-side) e limpa o estado local de autenticação. O estado local é sempre
+   * limpo — mesmo se a revogação falhar — para evitar sessão inconsistente; nesse
+   * caso a Promise é rejeitada para o chamador informar o usuário. Não redireciona:
+   * o componente decide (ver `redirectToLogout`).
+   */
+  logout: () => Promise<void>;
 }
 
 // Decodifica o payload (2ª parte) de um JWT sem validar assinatura — a
@@ -60,8 +68,10 @@ function userFromIdToken(token: string): SessionUser {
   };
 }
 
+type SessionState = Pick<Session, 'authenticated' | 'user'>;
+
 export function useSession(): Session {
-  const [session, setSession] = useState<Session>({ authenticated: false, user: null });
+  const [state, setState] = useState<SessionState>({ authenticated: false, user: null });
 
   useEffect(() => {
     let cancelled = false;
@@ -70,7 +80,7 @@ export function useSession(): Session {
       if (!authEnabled) {
         // Dev local: sessão válida sem token; nome genérico só para a UI.
         if (!cancelled) {
-          setSession({ authenticated: true, user: { name: 'Dev User', avatarUrl: null } });
+          setState({ authenticated: true, user: { name: 'Dev User', avatarUrl: null } });
         }
         return;
       }
@@ -78,7 +88,7 @@ export function useSession(): Session {
       const token = await getIdToken();
       if (cancelled) return;
 
-      setSession(
+      setState(
         token
           ? { authenticated: true, user: userFromIdToken(token) }
           : { authenticated: false, user: null },
@@ -91,5 +101,18 @@ export function useSession(): Session {
     };
   }, []);
 
-  return session;
+  // Logout seguro (Task #75): revoga no servidor e limpa o estado local. O bloco
+  // finally garante que o estado local seja sempre limpo, mesmo se a revogação
+  // lançar — assim a UI nunca fica presa em um estado "meio autenticado". A
+  // exceção da revogação é repropagada para o componente tratar (Task #77).
+  const logout = useCallback(async () => {
+    try {
+      await revokeSession();
+    } finally {
+      clearLocalSession();
+      setState({ authenticated: false, user: null });
+    }
+  }, []);
+
+  return { ...state, logout };
 }

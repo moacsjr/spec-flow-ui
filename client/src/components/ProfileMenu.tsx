@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react';
-import { logout } from '../auth/cognito';
 import { useActiveTenant } from '../hooks/useActiveTenant';
 import { useUserProfile } from '../hooks/useUserProfile';
 import { ProfileDropdown } from './ProfileDropdown';
@@ -72,7 +71,6 @@ export function ProfileMenu() {
         onCloseAndRestoreFocus={closeAndRestoreFocus}
         userData={profile}
         tenantData={tenant}
-        onLogout={logout}
       />
     </div>
   );

@@ -1,6 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { redirectToLogout } from '../auth/cognito';
+import { useSession } from '../hooks/useSession';
 
-// Dropdown do menu de perfil (Story #70 / Task #71 + #73).
+// Dropdown do menu de perfil (Story #70 / Task #71 + #73; logout na Story #74).
 //
 // Componente controlado: o pai (`ProfileMenu`) mantém o estado de abertura e
 // passa `isOpen`/`onClose`. Exibe os dados obrigatórios do RN004 — nome do
@@ -10,6 +12,11 @@ import { useEffect, useRef } from 'react';
 // (Task #73): `role="menu"` + `aria-labelledby`, itens acionáveis com
 // `role="menuitem"`, foco no primeiro item ao abrir, navegação por ↑/↓/Home/End
 // e fechamento por ESC devolvendo o foco ao gatilho.
+//
+// Logout (Story #74): o botão aciona `logout` do `useSession` (revoga a sessão
+// no servidor e limpa o estado local), mostra um estado de carregamento enquanto
+// a requisição corre (Task #76) e, ao concluir, redireciona para o login. Erros
+// são informados inline sem fechar o dropdown (Task #77).
 
 export interface ProfileUserData {
   name: string;
@@ -30,7 +37,6 @@ interface ProfileDropdownProps {
   userData: ProfileUserData;
   /** Tenant ativo; `null` quando os dados estão indisponíveis (CE002). */
   tenantData: ProfileTenantData | null;
-  onLogout: () => void;
   /** `id` do dropdown, referenciado pelo `aria-controls` do gatilho. */
   id?: string;
   /** `id` do gatilho, usado como `aria-labelledby` do menu. */
@@ -51,11 +57,13 @@ export function ProfileDropdown({
   onCloseAndRestoreFocus,
   userData,
   tenantData,
-  onLogout,
   id,
   labelledBy,
 }: ProfileDropdownProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const { logout } = useSession();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
 
   // Fecha ao clicar fora do dropdown. Só escuta enquanto está aberto.
   useEffect(() => {
@@ -128,9 +136,24 @@ export function ProfileDropdown({
   const tenantId = orFallback(tenantData?.id);
   const tenantName = orFallback(tenantData?.name);
 
-  const handleLogout = () => {
-    onClose();
-    onLogout();
+  // Fluxo de logout (Task #76 + #77): desabilita o botão e mostra carregamento
+  // enquanto revoga a sessão; ao concluir, redireciona para o login. Em caso de
+  // erro na revogação, o estado local já foi limpo por `logout` (evita sessão
+  // inconsistente) — informamos o usuário inline e ainda assim redirecionamos
+  // para o login, encerrando a sessão de forma segura.
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setLogoutError(null);
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      redirectToLogout();
+    } catch {
+      setLogoutError('Não foi possível encerrar a sessão no servidor. Encerrando a sessão local e redirecionando…');
+      redirectToLogout();
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   return (
@@ -166,9 +189,23 @@ export function ProfileDropdown({
             className="profile-dropdown__logout"
             role="menuitem"
             onClick={handleLogout}
+            disabled={isLoggingOut}
+            aria-busy={isLoggingOut}
           >
-            Sair
+            {isLoggingOut ? (
+              <>
+                <span className="profile-dropdown__spinner" aria-hidden="true" />
+                Saindo…
+              </>
+            ) : (
+              'Sair'
+            )}
           </button>
+          {logoutError && (
+            <p className="profile-dropdown__error" role="alert">
+              {logoutError}
+            </p>
+          )}
         </li>
       </ul>
     </div>

@@ -128,9 +128,46 @@ export async function getIdToken(): Promise<string | null> {
   return refreshed?.idToken ?? null;
 }
 
-export function logout(): void {
+// Remove os tokens da sessão do armazenamento local do client. Idempotente:
+// pode ser chamado várias vezes com segurança (usado no fluxo de logout do menu
+// para garantir estado local limpo mesmo quando a revogação server-side falha).
+export function clearLocalSession(): void {
   sessionStorage.removeItem(STORAGE_KEY);
+}
+
+// Revoga o refresh token no Cognito (invalidação server-side da sessão). Lança
+// em falha de rede ou resposta não-ok, para o chamador tratar e informar o
+// usuário. No dev (auth desabilitada) ou sem refresh token é um no-op resolvido.
+export async function revokeSession(): Promise<void> {
   if (!authEnabled) return;
+  const tokens = loadTokens();
+  if (!tokens?.refreshToken) return;
+  const res = await fetch(`${DOMAIN}/oauth2/revoke`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ client_id: CLIENT_ID, token: tokens.refreshToken }),
+  });
+  if (!res.ok) {
+    throw new Error(`Falha ao revogar a sessão no Cognito (HTTP ${res.status})`);
+  }
+}
+
+// Redireciona o usuário para encerrar a sessão do Hosted UI e retornar ao login
+// (o bootstrap detecta a ausência de token e dispara o login novamente). Em dev
+// (auth desabilitada) apenas recarrega a aplicação a partir da raiz.
+export function redirectToLogout(): void {
+  if (!authEnabled) {
+    window.location.assign('/');
+    return;
+  }
   const params = new URLSearchParams({ client_id: CLIENT_ID, logout_uri: redirectUri() });
   window.location.assign(`${DOMAIN}/logout?${params}`);
+}
+
+// Logout "simples" (fire-and-forget) usado fora do menu de perfil: limpa o
+// estado local e redireciona, sem aguardar a revogação server-side.
+export function logout(): void {
+  clearLocalSession();
+  if (!authEnabled) return;
+  redirectToLogout();
 }
