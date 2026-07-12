@@ -1,5 +1,5 @@
 {
-  "version": "0.5.8",
+  "version": "0.5.10",
   "owner": "astratech-net-br",
   "repo": "spec-wave-ui",
   "project": {
@@ -8,6 +8,14 @@
     "id": "PVT_kwDOEelBqs4BdDu3",
     "number": 2,
     "fields": {
+      "Status": {
+        "id": "PVTSSF_lADOEelBqs4BdDu3zhXoDsA",
+        "options": {
+          "Todo": "f75ad846",
+          "In Progress": "47fc9ee4",
+          "Done": "98236657"
+        }
+      },
       "Etapa": {
         "id": "PVTSSF_lADOEelBqs4BdDu3zhXoDsw",
         "options": {
@@ -79,5 +87,6 @@
   "initializedAt": "2026-07-10T19:55:16.147Z",
   "specKit": {
     "command": "claude -p \"Você é um agente de desenvolvimento autônomo. Leia o arquivo de contexto {tasksFile} e implemente a Story #{issue} e todas as suas Tasks exatamente conforme as instruções nele. Antes de finalizar, rode o typecheck/build e os testes pertinentes e garanta que o projeto compila.\" --allowed-tools Read Edit Write MultiEdit Bash Grep Glob TodoWrite"
-  }
+  },
+  "refreshedAt": "2026-07-12T18:53:24.306Z"
 }
