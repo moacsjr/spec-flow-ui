@@ -137,6 +137,61 @@ button {
   color: var(--text-2);
 }
 
+/* Avatar de perfil (Story #66): imagem com fallback de iniciais. */
+.avatar--profile {
+  position: relative;
+  overflow: hidden;
+}
+
+.avatar__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+  transition: opacity 120ms ease;
+}
+
+/* Placeholder sutil enquanto a imagem carrega. */
+.avatar__placeholder {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0.03) 30%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.03) 70%
+  );
+  background-size: 200% 100%;
+  animation: avatar-shimmer 1.1s ease-in-out infinite;
+}
+
+@keyframes avatar-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Gatilho clicável do menu de perfil no cabeçalho. */
+.profile-trigger {
+  display: inline-flex;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 50%;
+  line-height: 0;
+}
+
+.profile-trigger:focus-visible {
+  outline: 2px solid var(--av-blue);
+  outline-offset: 2px;
+}
+
 /* -------------------------------------------------------------- Page shell */
 
 .page {
