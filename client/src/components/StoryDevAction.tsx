@@ -1,10 +1,18 @@
-// CTA principal da Story View, dentro do card de progresso. Três estados,
-// derivados do WorkItemView da Story:
+// CTA principal da Story View, dentro do card de progresso. Só aparece quando a
+// Story está na etapa "🚧 Desenvolvimento" do board (campo Etapa) — em qualquer
+// outra etapa não renderiza nada. Dentro da etapa, três estados derivados do
+// WorkItemView da Story:
 //   • devStatus 'prog'      → barra animada ("Desenvolvimento em andamento")
 //   • devAgentRequested     → "Aguardando Agente IA" (label já aplicado)
 //   • devStatus 'todo'      → botão "Iniciar Desenvolvimento" (aplica o label)
 // Ao clicar, aplica spec-wave:dev-agent e troca a view — o próprio re-render
 // passa a mostrar "Aguardando Agente IA" (sem polling: o label é imediato).
+
+// A etapa vem com prefixo de emoji (ex.: "🚧 Desenvolvimento"); casamos pelo
+// nome para tolerar variações do emoji.
+function isDevelopmentStage(stage: string | null | undefined): boolean {
+  return /desenvolvimento/i.test(stage ?? '');
+}
 
 import { useState } from 'react';
 import type { WorkItemView } from '@spec-flow/shared';
@@ -21,6 +29,10 @@ interface StoryDevActionProps {
 export function StoryDevAction({ repoId, number, view, applyView }: StoryDevActionProps) {
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Fora da etapa "🚧 Desenvolvimento": não mostra a CTA (nem botão, nem
+  // "Aguardando Agente IA", nem barra de andamento).
+  if (!isDevelopmentStage(view.devStage)) return null;
 
   // Concluída: nada a fazer (ignora um label spec-wave:dev-agent que tenha ficado).
   if (view.devStatus === 'done') return null;

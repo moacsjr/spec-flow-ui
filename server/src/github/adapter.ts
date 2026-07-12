@@ -306,6 +306,7 @@ export function adaptStory(issue: GhIssue, ctx: AdaptContext = {}): WorkItemView
     descriptionMdx: issue.body || '',
     devStatus: boardStatus(issue),
     devAgentRequested: labelNames(issue).includes('spec-wave:dev-agent'),
+    devStage: issue.projectStage ?? null,
     headerPct: pct,
     progressLabel: 'Progresso da story',
     childrenLabel: 'Tasks',

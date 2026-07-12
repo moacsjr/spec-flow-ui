@@ -199,6 +199,7 @@ export interface WorkItemView {
   planApproved?: boolean; // só Feature: true se label spec-wave:plan-approved presente
   devStatus?: Status; // só Story: status do board normalizado (todo/prog/done)
   devAgentRequested?: boolean; // só Story: true se label spec-wave:dev-agent presente
+  devStage?: string | null; // só Story: nome da etapa do board ("Etapa"); a CTA de dev só aparece na etapa Desenvolvimento
   headerPct: number; // % grande do painel de progresso
   progressLabel: string; // "Progresso do épico" / "da feature" / "da story"
   childrenLabel: string; // "Features" | "Stories" | "Tasks"

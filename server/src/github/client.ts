@@ -121,13 +121,23 @@ query RepoEpics($owner: String!, $repo: String!) {
 }`;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// Extrai o valor do campo single-select "Status" do(s) Project(s) v2 da issue.
-// Valores de outros tipos de campo voltam como `{}` (não casaram o fragmento),
-// então filtramos por `field.name === 'Status'`. Pega o primeiro que encontrar.
+// Valor do campo single-select "Status" (Todo/In Progress/Done) do board.
 function projectStatusOf(node: any): string | null {
+  return projectFieldOf(node, 'Status');
+}
+
+// Valor do campo "Etapa" (single-select do board) — a fase do kanban da issue.
+function projectStageOf(node: any): string | null {
+  return projectFieldOf(node, 'Etapa');
+}
+
+// Extrai o valor do primeiro campo single-select com o `name` dado nos
+// Project(s) v2 da issue. Valores de outros tipos de campo voltam como `{}`
+// (não casaram o fragmento), então filtramos por `field.name`.
+function projectFieldOf(node: any, fieldName: string): string | null {
   for (const item of node.projectItems?.nodes ?? []) {
     for (const fv of item.fieldValues?.nodes ?? []) {
-      if (fv?.field?.name === 'Status' && typeof fv.name === 'string') return fv.name;
+      if (fv?.field?.name === fieldName && typeof fv.name === 'string') return fv.name;
     }
   }
   return null;
@@ -147,6 +157,7 @@ function normalize(node: any): GhIssue {
       ? { title: node.milestone.title, dueOn: node.milestone.dueOn, createdAt: node.milestone.createdAt }
       : null,
     projectStatus: projectStatusOf(node),
+    projectStage: projectStageOf(node),
     subIssues: (node.subIssues?.nodes ?? []).map(normalize),
   };
 }
