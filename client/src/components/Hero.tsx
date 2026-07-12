@@ -2,6 +2,7 @@ import type { MetaField, WorkItemPatch, WorkItemView } from '@spec-flow/shared';
 import { Avatar } from './Avatar';
 import { ProgressPanel } from './ProgressPanel';
 import { StoryDevAction } from './StoryDevAction';
+import { TypeBadge } from './TypeBadge';
 import { EditButton, EditError, EditActions } from './EditControls';
 import { useInlineEdit } from '../hooks/useInlineEdit';
 
@@ -59,7 +60,11 @@ export function Hero({ view, repoId, number, applyView, onSave }: HeroProps) {
             <span className="pill__dot" />
             {view.status}
           </span>
-          <span className="code">{view.code}</span>
+          {/* Tipo colado ao identificador (padrão Jira/Linear): [S Story] ITEM-66. */}
+          <span className="hero__id">
+            <TypeBadge type={view.level} variant="pill" />
+            <span className="code">{view.code}</span>
+          </span>
         </div>
 
         {view.planApproved && (

@@ -140,6 +140,8 @@ export function WorkItemScreen({ repoId, level, number }: WorkItemScreenProps) {
     ...view.breadcrumb.slice(1).map((c) => ({
       label: c.label,
       href: c.to ? hrefForItem(repoId, c.to.level, c.to.number) : undefined,
+      // Ancestrais têm o nível no próprio crumb; o segmento atual (sem `to`) é o item da tela.
+      type: c.to ? c.to.level : view.level,
     })),
   ];
 

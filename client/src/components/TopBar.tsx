@@ -1,12 +1,15 @@
-import type { Person } from '@spec-flow/shared';
+import type { Person, WorkItemType } from '@spec-flow/shared';
 import { Avatar } from './Avatar';
 import { UserAvatar } from './UserAvatar';
 import { useSession } from '../hooks/useSession';
+import { TypeBadge } from './TypeBadge';
 
 // Crumb com href já resolvido pela tela (sem href = segmento atual).
+// `type` (quando o segmento é um work item) mostra o ícone do tipo colado ao código.
 export interface BreadCrumb {
   label: string;
   href?: string;
+  type?: WorkItemType;
 }
 
 interface TopBarProps {
@@ -42,17 +45,21 @@ export function TopBar({ breadcrumb, owner }: TopBarProps) {
           {breadcrumb.map((crumb, i) => (
             <span key={`${crumb.label}-${i}`} style={{ display: 'contents' }}>
               {i > 0 && <span className="breadcrumb__sep">/</span>}
-              {crumb.href ? (
-                <a className="breadcrumb__seg" href={crumb.href}>
-                  {crumb.label}
-                </a>
-              ) : (
-                <span
-                  className={`breadcrumb__seg${i === breadcrumb.length - 1 ? ' breadcrumb__seg--current' : ''}`}
-                >
-                  {crumb.label}
-                </span>
-              )}
+              <span className="breadcrumb__item">
+                {/* Ícone do tipo compacto, colado ao código (ex.: [S] ITEM-66). */}
+                {crumb.type && <TypeBadge type={crumb.type} size="sm" />}
+                {crumb.href ? (
+                  <a className="breadcrumb__seg" href={crumb.href}>
+                    {crumb.label}
+                  </a>
+                ) : (
+                  <span
+                    className={`breadcrumb__seg${i === breadcrumb.length - 1 ? ' breadcrumb__seg--current' : ''}`}
+                  >
+                    {crumb.label}
+                  </span>
+                )}
+              </span>
             </span>
           ))}
         </nav>

@@ -77,6 +77,14 @@ button {
 .breadcrumb__seg--current { color: var(--text-2); }
 .breadcrumb__sep { color: var(--text-ghost); }
 
+/* Tipo + código colados no breadcrumb (ex.: [S] ITEM-66). */
+.breadcrumb__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
 .topbar__right {
   display: flex;
   align-items: center;
@@ -258,6 +266,72 @@ button {
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-muted);
+}
+
+/* Identidade do item (tipo colado ao código), padrão Jira/Linear. */
+.hero__id {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* Ícone do tipo do work item: quadradinho colorido com a inicial do tipo.
+   A cor sai da custom property --tc (definida por tipo abaixo); dentro da pill,
+   o chip herda --tc do wrapper .type-pill--<tipo>. */
+.type-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-family: var(--font-body);
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  border-radius: 5px;
+  background: var(--tc, #636c76);
+}
+
+.type-badge--md {
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+}
+
+.type-badge--sm {
+  width: 15px;
+  height: 15px;
+  font-size: 9px;
+  border-radius: 4px;
+}
+
+/* Uma cor por tipo (fonte única, compartilhada pelo chip sólido e pela pill):
+   Initiative roxo · Epic violeta · Feature verde · Story azul · Task cinza
+   (Bug/Spike com tons próprios, fora da hierarquia). */
+.type-badge--initiative, .type-pill--initiative { --tc: #7c5cff; }
+.type-badge--epic, .type-pill--epic { --tc: #a855f7; }
+.type-badge--feature, .type-pill--feature { --tc: #2ea043; }
+.type-badge--story, .type-pill--story { --tc: #2f81f7; }
+.type-badge--task, .type-pill--task { --tc: #636c76; }
+.type-badge--bug, .type-pill--bug { --tc: #e5534b; }
+.type-badge--spike, .type-pill--spike { --tc: #636c76; }
+
+/* Pill de tipo (cabeçalho): chip da inicial + nome do tipo, tintada por --tc —
+   mesmo padrão da .pill de status. */
+.type-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 4px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  background: color-mix(in srgb, var(--tc) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tc) 45%, transparent);
+  color: color-mix(in srgb, var(--tc) 55%, #fff);
+}
+
+.type-pill__label {
+  line-height: 1;
 }
 
 .hero__title {
