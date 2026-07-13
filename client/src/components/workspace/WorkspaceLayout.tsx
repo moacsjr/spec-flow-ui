@@ -24,6 +24,8 @@ import { ProjectPage } from './pm/ProjectPage';
 import { BacklogPage } from './pm/BacklogPage';
 import { PrioritizationPage } from './pm/PrioritizationPage';
 import { PlanningPage } from './pm/PlanningPage';
+import { Planning2Page } from './pm/Planning2Page';
+import { MilestonesTimelinePage } from './pm/MilestonesTimelinePage';
 import { PmProgressPage } from './pm/ProgressPage';
 import { TechDashboard } from './tech/TechDashboard';
 import { SpecificationPage } from './tech/SpecificationPage';
@@ -48,6 +50,8 @@ const PAGES: Record<WorkspaceRole, Record<string, ComponentType<WorkspacePagePro
     backlog: BacklogPage,
     prioritization: PrioritizationPage,
     planning: PlanningPage,
+    planning2: Planning2Page,
+    milestones: MilestonesTimelinePage,
     progress: PmProgressPage,
   },
   tech: {
@@ -74,9 +78,10 @@ const PAGES: Record<WorkspaceRole, Record<string, ComponentType<WorkspacePagePro
 interface WorkspaceLayoutProps {
   role: WorkspaceRole;
   page: string;
+  query?: Record<string, string>;
 }
 
-function WorkspaceShell({ role, page: rawPage }: WorkspaceLayoutProps) {
+function WorkspaceShell({ role, page: rawPage, query }: WorkspaceLayoutProps) {
   const page = isWorkspacePage(role, rawPage) ? rawPage : 'dashboard';
   const { repoId, setRepoId, milestoneNumber, setMilestoneNumber } = useWorkspace();
   const repos = useRepositories();
@@ -162,6 +167,7 @@ function WorkspaceShell({ role, page: rawPage }: WorkspaceLayoutProps) {
               repoId={validRepoId}
               snapshot={snapshot}
               milestoneNumber={role === 'dev' ? milestoneNumber : null}
+              query={query}
               refresh={refresh}
             />
           )}

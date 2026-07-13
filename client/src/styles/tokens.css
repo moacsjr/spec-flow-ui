@@ -40,6 +40,8 @@
   --progress-bg: var(--accent-soft);
   --todo:     #8a8178;
   --todo-bg:  rgba(138, 129, 120, 0.14);
+  --warning:  #d9b457;
+  --danger:   #e5695e;
 
   /* Avatares (initials) — texto escuro #1a1410 */
   --av-blue:      #6f9bd1;

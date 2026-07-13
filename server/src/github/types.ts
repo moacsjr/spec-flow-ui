@@ -96,4 +96,5 @@ export interface GhMilestoneSummary {
   state: 'open' | 'closed';
   openIssues: number;
   closedIssues: number;
+  description: string | null;
 }

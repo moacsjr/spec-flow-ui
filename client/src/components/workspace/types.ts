@@ -9,5 +9,6 @@ export interface WorkspacePageProps {
   repoId: string;
   snapshot: ProjectSnapshot;
   milestoneNumber: number | null; // milestone corrente (papel dev); null = todos
+  query?: Record<string, string>; // filtros vindos do hash (ex.: ?milestone=3)
   refresh: () => void;
 }

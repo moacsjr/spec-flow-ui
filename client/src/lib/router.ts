@@ -19,7 +19,8 @@ export type Route =
   | { view: 'invite'; code: string }
   // Página do workspace ('dashboard', 'backlog'…). Página desconhecida cai no
   // dashboard do papel — validação fica no WorkspaceLayout (que conhece a nav).
-  | { view: 'workspace'; role: WorkspaceRole; page: string };
+  // `query`: filtros opcionais passados no hash (ex.: ?milestone=3).
+  | { view: 'workspace'; role: WorkspaceRole; page: string; query?: Record<string, string> };
 
 export const DASHBOARD_ROUTE: Route = { view: 'dashboard' };
 export const DASHBOARD_HREF = '#/dashboard';
@@ -31,16 +32,28 @@ export const DEFAULT_ROUTE: Route = DASHBOARD_ROUTE;
 const LEVELS: Level[] = ['epic', 'feature', 'story'];
 const WORKSPACE_ROLES: WorkspaceRole[] = ['pm', 'tech', 'dev'];
 
+function parseQuery(queryStr: string | undefined): Record<string, string> | undefined {
+  if (!queryStr) return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, v] of new URLSearchParams(queryStr)) out[k] = v;
+  return Object.keys(out).length ? out : undefined;
+}
+
 // Faz parse do hash para uma Route. Inválido/vazio → DEFAULT_ROUTE.
 export function parseHash(hash: string): Route {
-  const path = hash.replace(/^#\/?/, '');
-  const [a, b, c, d] = path.split('/');
+  const [rawPath, queryStr] = hash.replace(/^#\/?/, '').split('?');
+  const [a, b, c, d] = rawPath.split('/');
 
   if (a === 'dashboard') return DASHBOARD_ROUTE;
   if (a === 'settings') return { view: 'settings' };
   if (a === 'invite' && b) return { view: 'invite', code: b };
   if (a === 'ws' && WORKSPACE_ROLES.includes(b as WorkspaceRole)) {
-    return { view: 'workspace', role: b as WorkspaceRole, page: c || 'dashboard' };
+    return {
+      view: 'workspace',
+      role: b as WorkspaceRole,
+      page: c || 'dashboard',
+      query: parseQuery(queryStr),
+    };
   }
   if (a === 'repositories') {
     if (b === 'new') return { view: 'repo-new' };
@@ -63,5 +76,15 @@ export function parseHash(hash: string): Route {
 export const hrefForEpics = (repoId: string): string => `#/repos/${repoId}/epics`;
 export const hrefForItem = (repoId: string, level: Level, n: number): string =>
   `#/repos/${repoId}/${level}/${n}`;
-export const hrefForWorkspace = (role: WorkspaceRole, page = 'dashboard'): string =>
-  `#/ws/${role}/${page}`;
+export const hrefForWorkspace = (
+  role: WorkspaceRole,
+  page = 'dashboard',
+  query?: Record<string, string | number>,
+): string => {
+  const qs = query
+    ? new URLSearchParams(
+        Object.fromEntries(Object.entries(query).map(([k, v]) => [k, String(v)])),
+      ).toString()
+    : '';
+  return `#/ws/${role}/${page}${qs ? `?${qs}` : ''}`;
+};

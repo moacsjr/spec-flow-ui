@@ -27,7 +27,14 @@ export default function App() {
 
   if (route.view === 'workspace') {
     // `key` por papel remonta o shell na troca de papel (reinicia página/estado).
-    return <WorkspaceLayout key={route.role} role={route.role} page={route.page} />;
+    return (
+      <WorkspaceLayout
+        key={route.role}
+        role={route.role}
+        page={route.page}
+        query={route.query}
+      />
+    );
   }
 
   if (route.view === 'settings') {

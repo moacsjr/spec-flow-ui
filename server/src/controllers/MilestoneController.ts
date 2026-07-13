@@ -7,10 +7,12 @@ import { isValidRepoId } from '../lib/validation.ts';
 import { tenantOf } from '../middleware/auth.ts';
 import {
   createMilestoneForRepository,
+  deleteMilestoneForRepository,
   listMilestonesForRepository,
   setStoryMilestoneForRepository,
   updateMilestoneForRepository,
 } from '../services/milestoneService.ts';
+import { generateReleaseNotes } from '../services/insightsService.ts';
 
 function repoIdOr400(req: Request, res: Response): string | null {
   const repoId = req.params.id;
@@ -77,11 +79,16 @@ export async function postRepositoryMilestone(
   }
   const dueOn = parseDueOn(body.dueOn, res);
   if (dueOn === false) return;
+  if ('description' in body && typeof body.description !== 'string') {
+    res.status(400).json({ error: 'description deve ser texto.' });
+    return;
+  }
 
   try {
     const created = await createMilestoneForRepository(tenantOf(req).tenantId, repoId, {
       title: body.title.trim(),
       dueOn: dueOn ?? undefined,
+      ...(typeof body.description === 'string' ? { description: body.description } : {}),
     });
     res.status(201).json(created);
   } catch (err) {
@@ -105,7 +112,12 @@ export async function patchRepositoryMilestone(
   if (milestoneNumber === null) return;
 
   const body = (req.body ?? {}) as Record<string, unknown>;
-  const patch: { title?: string; dueOn?: string | null; state?: 'open' | 'closed' } = {};
+  const patch: {
+    title?: string;
+    dueOn?: string | null;
+    state?: 'open' | 'closed';
+    description?: string;
+  } = {};
   if ('title' in body) {
     if (typeof body.title !== 'string' || body.title.trim().length === 0) {
       res.status(400).json({ error: 'O título do milestone não pode ser vazio.' });
@@ -125,14 +137,68 @@ export async function patchRepositoryMilestone(
     }
     patch.state = body.state;
   }
+  if ('description' in body) {
+    if (typeof body.description !== 'string') {
+      res.status(400).json({ error: 'description deve ser texto.' });
+      return;
+    }
+    patch.description = body.description;
+  }
   if (Object.keys(patch).length === 0) {
-    res.status(400).json({ error: 'Nada para atualizar: informe title, dueOn e/ou state.' });
+    res.status(400).json({ error: 'Nada para atualizar: informe title, dueOn, state e/ou description.' });
     return;
   }
 
   try {
     await updateMilestoneForRepository(tenantOf(req).tenantId, repoId, milestoneNumber, patch);
     res.status(204).end();
+  } catch (err) {
+    if (err instanceof HttpError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
+// DELETE /api/repositories/:id/milestones/:milestoneNumber
+export async function deleteRepositoryMilestone(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const repoId = repoIdOr400(req, res);
+  if (!repoId) return;
+  const milestoneNumber = positiveIntOr400(res, req.params.milestoneNumber, 'Milestone');
+  if (milestoneNumber === null) return;
+
+  try {
+    await deleteMilestoneForRepository(tenantOf(req).tenantId, repoId, milestoneNumber);
+    res.status(204).end();
+  } catch (err) {
+    if (err instanceof HttpError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
+// POST /api/repositories/:id/milestones/:milestoneNumber/release-notes → { content }
+// Aciona a LLM para gerar Release Notes a partir das Stories do milestone.
+export async function postMilestoneReleaseNotes(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const repoId = repoIdOr400(req, res);
+  if (!repoId) return;
+  const milestoneNumber = positiveIntOr400(res, req.params.milestoneNumber, 'Milestone');
+  if (milestoneNumber === null) return;
+
+  try {
+    const content = await generateReleaseNotes(tenantOf(req).tenantId, repoId, milestoneNumber);
+    res.json({ content });
   } catch (err) {
     if (err instanceof HttpError) {
       res.status(err.status).json({ error: err.message });

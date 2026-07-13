@@ -120,7 +120,7 @@ export async function setStage(
 
 export async function createMilestone(
   repoId: string,
-  input: { title: string; dueOn?: string | null },
+  input: { title: string; dueOn?: string | null; description?: string },
 ): Promise<MilestoneSummary> {
   const json = await request(`/api/repositories/${repoId}/milestones`, {
     method: 'POST',
@@ -132,12 +132,35 @@ export async function createMilestone(
 export async function updateMilestone(
   repoId: string,
   milestoneNumber: number,
-  patch: { title?: string; dueOn?: string | null; state?: 'open' | 'closed' },
+  patch: { title?: string; dueOn?: string | null; state?: 'open' | 'closed'; description?: string },
 ): Promise<void> {
   await request(`/api/repositories/${repoId}/milestones/${milestoneNumber}`, {
     method: 'PATCH',
     payload: patch,
   });
+}
+
+// Exclui um milestone no GitHub (as stories ficam sem milestone).
+export async function deleteMilestone(
+  repoId: string,
+  milestoneNumber: number,
+): Promise<void> {
+  await request(`/api/repositories/${repoId}/milestones/${milestoneNumber}`, {
+    method: 'DELETE',
+  });
+}
+
+// Aciona a LLM para gerar Release Notes das Stories do milestone. Retorna o
+// texto (markdown); a persistência fica a cargo do chamador (metadados).
+export async function generateReleaseNotes(
+  repoId: string,
+  milestoneNumber: number,
+): Promise<string> {
+  const json = await request(
+    `/api/repositories/${repoId}/milestones/${milestoneNumber}/release-notes`,
+    { method: 'POST' },
+  );
+  return (json as { content: string }).content;
 }
 
 // Atribui/remove (null) o milestone de uma Story — sincroniza o GitHub Milestone.

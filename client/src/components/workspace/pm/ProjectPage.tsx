@@ -10,19 +10,10 @@ import type { WorkspacePageProps } from '../types';
 import { createWorkItem } from '../../../data/workItem';
 import { reparentWorkItem, reorderWorkItems } from '../../../data/workspace';
 import { readCollapsed, writeCollapsed } from '../../../state/projectTreePrefs';
+import { asType, typeOf } from '../../../lib/workItemType';
+import { TypeBadge } from '../TypeBadge';
 
 const AREAS = ['Frontend', 'Backend', 'Mobile', 'Infra', 'DevOps', 'Data'];
-
-const TYPE_LABELS: Record<string, string> = {
-  '[INITIATIVE]': 'Initiative',
-  '[EPIC]': 'Epic',
-  '[FEATURE]': 'Feature',
-  '[STORY]': 'Story',
-  '[TASK]': 'Task',
-  '[BUG]': 'Bug',
-  '[SPIKE]': 'Spike',
-  '[RFC]': 'RFC',
-};
 
 const TYPE_OPTION_LABEL: Record<WorkItemType, string> = {
   initiative: 'Initiative',
@@ -34,33 +25,8 @@ const TYPE_OPTION_LABEL: Record<WorkItemType, string> = {
   spike: 'Spike',
 };
 
-// Tipo de exibição: prioriza o label de tipo do spec-wave; cai no level inferido.
-function typeOf(item: SnapshotItem): string {
-  for (const label of item.labels) {
-    if (TYPE_LABELS[label]) return TYPE_LABELS[label];
-  }
-  if (item.level === 'unknown') return '—';
-  return item.level.charAt(0).toUpperCase() + item.level.slice(1);
-}
-
 function statusLabel(item: SnapshotItem): string {
   return item.state === 'closed' ? 'Fechado' : 'Aberto';
-}
-
-function typeSlug(item: SnapshotItem): string {
-  const t = typeOf(item).toLowerCase();
-  return ['initiative', 'epic', 'feature', 'story', 'task', 'bug', 'spike'].includes(t) ? t : 'unknown';
-}
-
-// Tipo canônico p/ a regra de hierarquia; null quando o tipo é indeterminado
-// (item sem label de tipo reconhecido → não participa do reparent por drag).
-function asType(item: SnapshotItem): WorkItemType | null {
-  const slug = typeSlug(item);
-  return (WORK_ITEM_TYPES as string[]).includes(slug) ? (slug as WorkItemType) : null;
-}
-
-function TypeBadge({ item }: { item: SnapshotItem }) {
-  return <span className={`proj-badge proj-badge--${typeSlug(item)}`}>{typeOf(item)}</span>;
 }
 
 // ---------- Formulário: criar work item de qualquer tipo ----------

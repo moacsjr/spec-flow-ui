@@ -4,6 +4,7 @@
 import type { MilestoneSummary } from '@spec-flow/shared';
 import {
   createMilestone,
+  deleteMilestone,
   fetchIssueTitle,
   listMilestones,
   setIssueMilestone,
@@ -23,6 +24,7 @@ function toSummary(m: GhMilestoneSummary): MilestoneSummary {
     state: m.state,
     openCount: m.openIssues,
     closedCount: m.closedIssues,
+    description: m.description,
   };
 }
 
@@ -41,10 +43,14 @@ export async function listMilestonesForRepository(
 export async function createMilestoneForRepository(
   tenantId: string,
   repoId: string,
-  input: { title: string; dueOn?: string | null },
+  input: { title: string; dueOn?: string | null; description?: string },
 ): Promise<MilestoneSummary> {
   const config = await configFor(tenantId, repoId);
-  const created = await createMilestone(config, { title: input.title, dueOn: input.dueOn });
+  const created = await createMilestone(config, {
+    title: input.title,
+    dueOn: input.dueOn,
+    description: input.description,
+  });
   invalidateSnapshot(tenantId, repoId);
   return toSummary(created);
 }
@@ -53,10 +59,20 @@ export async function updateMilestoneForRepository(
   tenantId: string,
   repoId: string,
   milestoneNumber: number,
-  patch: { title?: string; dueOn?: string | null; state?: 'open' | 'closed' },
+  patch: { title?: string; dueOn?: string | null; state?: 'open' | 'closed'; description?: string },
 ): Promise<void> {
   const config = await configFor(tenantId, repoId);
   await updateMilestone(config, milestoneNumber, patch);
+  invalidateSnapshot(tenantId, repoId);
+}
+
+export async function deleteMilestoneForRepository(
+  tenantId: string,
+  repoId: string,
+  milestoneNumber: number,
+): Promise<void> {
+  const config = await configFor(tenantId, repoId);
+  await deleteMilestone(config, milestoneNumber);
   invalidateSnapshot(tenantId, repoId);
 }
 

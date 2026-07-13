@@ -140,3 +140,61 @@ export async function generateInsight(
     emitMetric('InsightDurationMs', Date.now() - startedAt, 'Milliseconds', { scope });
   }
 }
+
+// Gera um texto de Release Notes padronizado (markdown) para um milestone, a
+// partir das Stories atribuídas a ele. Não persiste — o chamador salva.
+export async function generateReleaseNotes(
+  tenantId: string,
+  repoId: string,
+  milestoneNumber: number,
+): Promise<string> {
+  const snapshot = await loadSnapshotForRepository(tenantId, repoId);
+  const milestone = snapshot.milestones.find((m) => m.number === milestoneNumber);
+  if (!milestone) throw new HttpError(404, `Milestone #${milestoneNumber} não encontrado.`);
+
+  const stories = snapshot.items.filter((i) => i.milestone?.number === milestoneNumber);
+
+  // Mesma política de cota do refine/insights: tenant com chave própria não consome.
+  const tenantKey = await tenantOpenrouterKey(tenantId);
+  if (!tenantKey) await consumeRefineOrThrow(tenantId);
+
+  const storyLines =
+    stories
+      .map(
+        (s) =>
+          `- #${s.number} ${s.title}` +
+          `${s.priority ? ` (prio ${s.priority})` : ''}` +
+          `${s.state === 'closed' || s.stage === 'Done' ? ' [concluída]' : ''}`,
+      )
+      .join('\n') || '(sem stories atribuídas)';
+
+  const user = [
+    `Gere um texto de Release Notes padronizado, em português e em markdown, para a release "${milestone.title}".`,
+    milestone.dueOn ? `Data-alvo: ${milestone.dueOn.slice(0, 10)}.` : '',
+    'Estrutura obrigatória:',
+    `1. Um título "# Release Notes — ${milestone.title}".`,
+    '2. Um parágrafo de resumo executivo (o que esta release entrega, em linguagem de usuário).',
+    '3. Seção "## ✨ Novidades" com bullets orientados ao usuário final (sem jargão de issue/número).',
+    '4. Seção "## 📋 Escopo" com a contagem de stories entregues.',
+    '5. Rodapé curto.',
+    'Baseie-se SOMENTE nas stories listadas; não invente itens.',
+    '\n## Stories da release\n',
+    storyLines,
+  ].join('\n');
+
+  const startedAt = Date.now();
+  try {
+    return await generateText({
+      system:
+        SYSTEM_BASE +
+        ' Aqui você redige Release Notes claras e padronizadas para usuários finais.',
+      user,
+      apiKeyOverride: tenantKey,
+      maxTokens: 1000,
+    });
+  } finally {
+    emitMetric('InsightDurationMs', Date.now() - startedAt, 'Milliseconds', {
+      scope: 'release-notes',
+    });
+  }
+}

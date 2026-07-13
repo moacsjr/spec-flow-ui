@@ -1,12 +1,23 @@
-// Planning do PM (RFC-003 §2): montar releases. Milestones contêm SOMENTE
-// Stories (regra do RFC; o server rejeita outros níveis). Atribuir uma Story
-// atualiza o campo Milestone da issue no GitHub — fonte de verdade.
+// Planning do PM (RFC-003 §2): Stories agrupadas pela sua Feature-pai, com filtro
+// por Iniciativa (a Initiative ancestral da Story). Atribuir um milestone a uma
+// Story atualiza o campo Milestone da issue no GitHub — fonte de verdade; o
+// milestone aparece como chip na linha. O "Create milestone" segue no topo para
+// alimentar o select de atribuição.
 
 import { useMemo, useState } from 'react';
+import type { SnapshotItem } from '@spec-flow/shared';
 import type { WorkspacePageProps } from '../types';
 import { QueueList } from '../QueueList';
-import { groupByMilestone, isOpen, isStory } from '../../../lib/workspaceSelectors';
-import { createMilestone, setStoryMilestone, updateMilestone } from '../../../data/workspace';
+import { TypeBadge } from '../TypeBadge';
+import { isOpen, isStory } from '../../../lib/workspaceSelectors';
+import { ancestorOfType, itemsByNumber, parentOf, typeSlug } from '../../../lib/workItemType';
+import { createMilestone, setStoryMilestone } from '../../../data/workspace';
+
+interface FeatureGroup {
+  key: string;
+  feature: SnapshotItem | null; // null = stories sem Feature-pai
+  items: SnapshotItem[];
+}
 
 function NewMilestoneForm({ repoId, onDone }: { repoId: string; onDone: () => void }) {
   const [title, setTitle] = useState('');
@@ -50,18 +61,58 @@ function NewMilestoneForm({ repoId, onDone }: { repoId: string; onDone: () => vo
 
 export function PlanningPage({ repoId, snapshot, refresh }: WorkspacePageProps) {
   const [busy, setBusy] = useState(false);
-  const [renaming, setRenaming] = useState<number | null>(null);
-  const [newTitle, setNewTitle] = useState('');
+  const [initiativeFilter, setInitiativeFilter] = useState('');
+
+  const byNumber = useMemo(() => itemsByNumber(snapshot.items), [snapshot.items]);
 
   const stories = useMemo(
     () => snapshot.items.filter((i) => isStory(i) && isOpen(i)),
     [snapshot.items],
   );
-  const openMilestones = snapshot.milestones.filter((m) => m.state === 'open');
-  const groups = groupByMilestone(
-    stories,
-    openMilestones.map((m) => ({ number: m.number, title: m.title })),
+
+  // Iniciativas abertas para o filtro (raiz da hierarquia da Story).
+  const initiatives = useMemo(
+    () =>
+      snapshot.items
+        .filter((i) => typeSlug(i) === 'initiative' && isOpen(i))
+        .sort((a, b) => a.number - b.number),
+    [snapshot.items],
   );
+
+  const filteredStories = useMemo(() => {
+    if (!initiativeFilter) return stories;
+    const target = Number(initiativeFilter);
+    return stories.filter(
+      (s) => ancestorOfType(s, byNumber, 'initiative')?.number === target,
+    );
+  }, [stories, initiativeFilter, byNumber]);
+
+  // Agrupa por Feature-pai (parentNumber). Features por número; "Sem feature" ao fim.
+  const groups = useMemo<FeatureGroup[]>(() => {
+    const map = new Map<number, FeatureGroup>();
+    const none: FeatureGroup = { key: 'none', feature: null, items: [] };
+    for (const story of filteredStories) {
+      const feature = parentOf(story, byNumber);
+      if (!feature) {
+        none.items.push(story);
+        continue;
+      }
+      const key = `f${feature.number}`;
+      let group = map.get(feature.number);
+      if (!group) {
+        group = { key, feature, items: [] };
+        map.set(feature.number, group);
+      }
+      group.items.push(story);
+    }
+    const result = [...map.values()].sort(
+      (a, b) => (a.feature?.number ?? 0) - (b.feature?.number ?? 0),
+    );
+    if (none.items.length > 0) result.push(none);
+    return result;
+  }, [filteredStories, byNumber]);
+
+  const openMilestones = snapshot.milestones.filter((m) => m.state === 'open');
 
   const run = (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -73,125 +124,91 @@ export function PlanningPage({ repoId, snapshot, refresh }: WorkspacePageProps) 
 
   return (
     <div className="ws-page">
-      <NewMilestoneForm repoId={repoId} onDone={refresh} />
+      <div className="ws-toolbar">
+        <label className="ws-toolbar__label">
+          Iniciativa{' '}
+          <select
+            value={initiativeFilter}
+            onChange={(e) => setInitiativeFilter(e.target.value)}
+            aria-label="Filtrar por iniciativa"
+          >
+            <option value="">Todas</option>
+            {initiatives.map((i) => (
+              <option key={i.number} value={i.number}>
+                #{i.number} {i.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <span className="ws-toolbar__spacer" />
+        <NewMilestoneForm repoId={repoId} onDone={refresh} />
+      </div>
 
-      {groups.map((group) => {
-        const milestone =
-          group.milestoneNumber !== null
-            ? snapshot.milestones.find((m) => m.number === group.milestoneNumber)
-            : undefined;
-        return (
-          <section key={group.key} className="ws-section">
-            <header className="ws-section__head">
-              {renaming === group.milestoneNumber && group.milestoneNumber !== null ? (
-                <span className="ws-section__rename">
-                  <input
-                    type="text"
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    aria-label="Novo nome do milestone"
-                  />
-                  <button
-                    type="button"
-                    className="btn btn--sm btn--accent"
-                    disabled={busy || !newTitle.trim()}
-                    onClick={() =>
-                      run(() =>
-                        updateMilestone(repoId, group.milestoneNumber as number, {
-                          title: newTitle.trim(),
-                        }).then(() => setRenaming(null)),
-                      )
-                    }
-                  >
-                    Salvar
-                  </button>
-                  <button type="button" className="btn btn--sm" onClick={() => setRenaming(null)}>
-                    Cancelar
-                  </button>
-                </span>
+      {groups.length === 0 && (
+        <p className="queue__empty">
+          {initiativeFilter
+            ? 'Nenhuma story nesta iniciativa.'
+            : 'Nenhuma story aberta para planejar.'}
+        </p>
+      )}
+
+      {groups.map((group) => (
+        <section key={group.key} className="ws-section">
+          <header className="ws-section__head">
+            <h3 className="ws-section__title">
+              {group.feature ? (
+                <>
+                  <TypeBadge item={group.feature} />
+                  <span className="ws-section__featurenum">#{group.feature.number}</span>{' '}
+                  {group.feature.title}
+                </>
               ) : (
-                <h3 className="ws-section__title">
-                  {group.title} <span className="ws-section__count">{group.items.length}</span>
-                  {milestone?.dueOn && (
-                    <span className="ws-section__due">alvo {milestone.dueOn.slice(0, 10)}</span>
-                  )}
-                </h3>
+                'Sem feature'
               )}
+              <span className="ws-section__count">{group.items.length}</span>
+            </h3>
+          </header>
 
-              {group.milestoneNumber !== null && renaming !== group.milestoneNumber && (
-                <span className="ws-section__tools">
-                  <button
-                    type="button"
-                    className="btn btn--sm"
-                    onClick={() => {
-                      setRenaming(group.milestoneNumber);
-                      setNewTitle(group.title);
-                    }}
-                  >
-                    Renomear
-                  </button>
-                  <input
-                    type="date"
-                    defaultValue={milestone?.dueOn?.slice(0, 10) ?? ''}
-                    disabled={busy}
-                    onChange={(e) =>
-                      run(() =>
-                        updateMilestone(repoId, group.milestoneNumber as number, {
-                          dueOn: e.target.value || null,
-                        }),
-                      )
+          <QueueList
+            repoId={repoId}
+            items={group.items}
+            empty=""
+            meta={(item) =>
+              !item.milestone ? (
+                <select
+                  className="queue__priosel"
+                  value=""
+                  disabled={busy || openMilestones.length === 0}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      run(() => setStoryMilestone(repoId, item.number, Number(e.target.value)));
                     }
-                    aria-label={`Data-alvo de ${group.title}`}
-                  />
-                </span>
-              )}
-            </header>
-
-            <QueueList
-              repoId={repoId}
-              items={group.items}
-              empty={
-                group.milestoneNumber === null
-                  ? 'Todas as stories estão em milestones.'
-                  : 'Nenhuma story neste milestone — atribua a partir de "Sem milestone".'
-              }
-              meta={(item) =>
-                group.milestoneNumber === null ? (
-                  <select
-                    className="queue__priosel"
-                    value=""
-                    disabled={busy || openMilestones.length === 0}
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        run(() => setStoryMilestone(repoId, item.number, Number(e.target.value)));
-                      }
-                    }}
-                    aria-label={`Milestone de #${item.number}`}
-                  >
-                    <option value="">Assign to…</option>
-                    {openMilestones.map((m) => (
-                      <option key={m.number} value={m.number}>
-                        {m.title}
-                      </option>
-                    ))}
-                  </select>
-                ) : null
-              }
-              actions={(item) =>
-                group.milestoneNumber !== null
-                  ? [
-                      {
-                        label: 'Remove',
-                        disabled: busy,
-                        onClick: () => run(() => setStoryMilestone(repoId, item.number, null)),
-                      },
-                    ]
-                  : []
-              }
-            />
-          </section>
-        );
-      })}
+                  }}
+                  aria-label={`Milestone de #${item.number}`}
+                >
+                  <option value="">Assign to…</option>
+                  {openMilestones.map((m) => (
+                    <option key={m.number} value={m.number}>
+                      {m.title}
+                    </option>
+                  ))}
+                </select>
+              ) : null
+            }
+            actions={(item) =>
+              item.milestone
+                ? [
+                    {
+                      label: 'Remove milestone',
+                      disabled: busy,
+                      onClick: () => run(() => setStoryMilestone(repoId, item.number, null)),
+                    },
+                  ]
+                : []
+            }
+          />
+        </section>
+      ))}
     </div>
   );
 }

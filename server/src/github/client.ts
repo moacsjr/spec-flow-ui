@@ -424,6 +424,7 @@ export async function listMilestones(config: GitHubConfig): Promise<GhMilestoneS
     state?: string;
     open_issues?: number;
     closed_issues?: number;
+    description?: string | null;
   }>;
   return json.map((m) => ({
     number: m.number ?? 0,
@@ -432,6 +433,7 @@ export async function listMilestones(config: GitHubConfig): Promise<GhMilestoneS
     state: m.state === 'closed' ? 'closed' : 'open',
     openIssues: m.open_issues ?? 0,
     closedIssues: m.closed_issues ?? 0,
+    description: m.description ?? null,
   }));
 }
 
@@ -712,6 +714,7 @@ export async function createMilestone(
     state?: string;
     open_issues?: number;
     closed_issues?: number;
+    description?: string | null;
   };
   return {
     number: json.number ?? 0,
@@ -720,19 +723,22 @@ export async function createMilestone(
     state: json.state === 'closed' ? 'closed' : 'open',
     openIssues: json.open_issues ?? 0,
     closedIssues: json.closed_issues ?? 0,
+    description: json.description ?? null,
   };
 }
 
-// Edita um milestone (REST PATCH): título, data-alvo (null limpa) e/ou estado.
+// Edita um milestone (REST PATCH): título, data-alvo (null limpa), estado e/ou
+// descrição (onde o planner guarda metadados de início/capacidade).
 export async function updateMilestone(
   config: GitHubConfig,
   milestoneNumber: number,
-  patch: { title?: string; dueOn?: string | null; state?: 'open' | 'closed' },
+  patch: { title?: string; dueOn?: string | null; state?: 'open' | 'closed'; description?: string },
 ): Promise<void> {
   const body: Record<string, unknown> = {};
   if (patch.title !== undefined) body.title = patch.title;
   if (patch.dueOn !== undefined) body.due_on = patch.dueOn;
   if (patch.state !== undefined) body.state = patch.state;
+  if (patch.description !== undefined) body.description = patch.description;
 
   const url = `https://api.github.com/repos/${config.owner}/${config.repo}/milestones/${milestoneNumber}`;
   const res = await fetch(url, {
@@ -750,6 +756,29 @@ export async function updateMilestone(
     );
   }
   if (!res.ok) throw new UpstreamError(`GitHub Milestones API ${res.status}: ${await res.text()}`);
+}
+
+// Exclui um milestone (REST DELETE). As issues atribuídas ficam sem milestone.
+export async function deleteMilestone(
+  config: GitHubConfig,
+  milestoneNumber: number,
+): Promise<void> {
+  const url = `https://api.github.com/repos/${config.owner}/${config.repo}/milestones/${milestoneNumber}`;
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `bearer ${config.token}`,
+      Accept: 'application/vnd.github+json',
+    },
+  });
+  if (res.status === 404) {
+    throw new NotFoundError(
+      `Milestone #${milestoneNumber} não encontrado em ${config.owner}/${config.repo}.`,
+    );
+  }
+  if (!res.ok && res.status !== 204) {
+    throw new UpstreamError(`GitHub Milestones API ${res.status}: ${await res.text()}`);
+  }
 }
 
 // Atribui/remove o milestone de uma issue (REST PATCH; null desatribui). É o

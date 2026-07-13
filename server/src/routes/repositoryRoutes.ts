@@ -22,8 +22,10 @@ import {
   updateRepositoryWorkItem,
 } from '../controllers/WorkItemController.ts';
 import {
+  deleteRepositoryMilestone,
   getRepositoryMilestones,
   patchRepositoryMilestone,
+  postMilestoneReleaseNotes,
   postRepositoryMilestone,
   putStoryMilestone,
 } from '../controllers/MilestoneController.ts';
@@ -69,6 +71,13 @@ repositoryRoutes.get('/repositories/:id/snapshot', (req, res, next) => {
 repositoryRoutes.get('/repositories/:id/milestones', getRepositoryMilestones);
 repositoryRoutes.post('/repositories/:id/milestones', postRepositoryMilestone);
 repositoryRoutes.patch('/repositories/:id/milestones/:milestoneNumber', patchRepositoryMilestone);
+repositoryRoutes.delete('/repositories/:id/milestones/:milestoneNumber', deleteRepositoryMilestone);
+repositoryRoutes.post(
+  '/repositories/:id/milestones/:milestoneNumber/release-notes',
+  (req, res, next) => {
+    postMilestoneReleaseNotes(req, res, next).catch(next);
+  },
+);
 
 // PUT /api/repositories/:id/workitems/story/:number/milestone → atribui/remove
 // o milestone de uma Story (só Stories entram em milestones — RFC-003).
