@@ -24,6 +24,7 @@ import { ProjectPage } from './pm/ProjectPage';
 import { BacklogPage } from './pm/BacklogPage';
 import { PrioritizationPage } from './pm/PrioritizationPage';
 import { PlanningPage } from './pm/PlanningPage';
+import { Planning2Page } from './pm/Planning2Page';
 import { PmProgressPage } from './pm/ProgressPage';
 import { TechDashboard } from './tech/TechDashboard';
 import { SpecificationPage } from './tech/SpecificationPage';
@@ -48,6 +49,7 @@ const PAGES: Record<WorkspaceRole, Record<string, ComponentType<WorkspacePagePro
     backlog: BacklogPage,
     prioritization: PrioritizationPage,
     planning: PlanningPage,
+    planning2: Planning2Page,
     progress: PmProgressPage,
   },
   tech: {

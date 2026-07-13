@@ -1,25 +1,125 @@
-// Backlog do PM (RFC-003 §2): ideias ainda SEM prioridade. Filtros por tipo/
-// área/label (client-side); ações: Create Idea (Feature sob um Épico — decisão
-// de produto: ideia sempre tem Initiative pai), AI Brainstorm, Edit, Delete,
-// Set Priority. Definir prioridade move o item para a Prioritization.
+// Backlog do PM (RFC-003 §2): explorador do projeto em duas colunas.
+//   • Esquerda: árvore da hierarquia Iniciativa → Épico → Feature.
+//   • Direita: tabela com TODAS as Stories do projeto.
+// Clicar num nó da árvore (Iniciativa/Épico/Feature) filtra a tabela para as
+// Stories descendentes dele. Ações de topo: Create Idea (Feature sob um Épico),
+// AI Brainstorm.
 
 import { useMemo, useState } from 'react';
-import type { Priority, SnapshotItem } from '@spec-flow/shared';
-import { PRIORITIES } from '@spec-flow/shared';
+import type { SnapshotItem } from '@spec-flow/shared';
 import type { WorkspacePageProps } from '../types';
-import { QueueList } from '../QueueList';
+import { ItemTable, type Column } from '../ItemTable';
+import { TypeBadge } from '../TypeBadge';
 import { AiSummary } from '../AiSummary';
 import { hrefForItem } from '../../../lib/router';
-import { isBacklogLevel, isEpic, isOpen } from '../../../lib/workspaceSelectors';
-import { deleteWorkItem, setPriority } from '../../../data/workspace';
+import { isEpic, isOpen, isStory } from '../../../lib/workspaceSelectors';
+import {
+  ancestorOfType,
+  isDescendantOf,
+  itemsByNumber,
+  typeOf,
+  typeSlug,
+} from '../../../lib/workItemType';
 import { createFeature } from '../../../data/workItem';
 
-const TYPE_OPTIONS = [
-  { value: '', label: 'Todos os tipos' },
-  { value: 'epic', label: 'Initiatives' },
-  { value: 'feature', label: 'Features' },
-  { value: 'story', label: 'Stories' },
-];
+// Tipos que compõem a árvore de hierarquia (Stories/Tasks ficam de fora).
+const TREE_TYPES = ['initiative', 'epic', 'feature'];
+const TREE_RANK: Record<string, number> = { initiative: 0, epic: 1, feature: 2 };
+
+function itemHref(repoId: string, item: SnapshotItem): { href: string; external: boolean } {
+  if (item.level === 'epic' || item.level === 'feature' || item.level === 'story') {
+    return { href: hrefForItem(repoId, item.level, item.number), external: false };
+  }
+  return { href: item.url, external: true };
+}
+
+// Célula "ancestral" (Feature/Epic/Iniciativa) — título com número esmaecido.
+function ancestorCell(item: SnapshotItem | null) {
+  return item ? (
+    <span className="proj-table__parent">
+      <span className="proj-table__parentnum">#{item.number}</span> {item.title}
+    </span>
+  ) : (
+    '—'
+  );
+}
+
+// ---------- Árvore da hierarquia ----------
+
+interface TreeNodeProps {
+  node: SnapshotItem;
+  childrenMap: Map<number, SnapshotItem[]>;
+  depth: number;
+  selected: number | null;
+  onSelect: (n: number) => void;
+  collapsed: Set<number>;
+  onToggle: (n: number) => void;
+}
+
+function TreeNode({
+  node,
+  childrenMap,
+  depth,
+  selected,
+  onSelect,
+  collapsed,
+  onToggle,
+}: TreeNodeProps) {
+  const kids = childrenMap.get(node.number) ?? [];
+  const hasKids = kids.length > 0;
+  const isCollapsed = collapsed.has(node.number);
+
+  return (
+    <li className="bl-tree__node">
+      <div
+        className={`bl-tree__row${selected === node.number ? ' bl-tree__row--selected' : ''}`}
+        style={{ paddingLeft: depth * 16 + 6 }}
+      >
+        {hasKids ? (
+          <button
+            type="button"
+            className="bl-tree__toggle"
+            onClick={() => onToggle(node.number)}
+            aria-label={isCollapsed ? 'Expandir' : 'Recolher'}
+            aria-expanded={!isCollapsed}
+          >
+            {isCollapsed ? '▸' : '▾'}
+          </button>
+        ) : (
+          <span className="bl-tree__toggle bl-tree__toggle--leaf" />
+        )}
+        <button
+          type="button"
+          className="bl-tree__label"
+          onClick={() => onSelect(node.number)}
+          aria-pressed={selected === node.number}
+          title={`#${node.number} ${node.title}`}
+        >
+          <TypeBadge item={node} />
+          <span className="bl-tree__title">{node.title}</span>
+        </button>
+      </div>
+      {hasKids && !isCollapsed && (
+        <ul className="bl-tree__children">
+          {kids.map((kid) => (
+            <TreeNode
+              key={kid.number}
+              node={kid}
+              childrenMap={childrenMap}
+              depth={depth + 1}
+              selected={selected}
+              onSelect={onSelect}
+              collapsed={collapsed}
+              onToggle={onToggle}
+            />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+// ---------- Formulário: criar ideia (Feature sob um Épico) ----------
 
 function CreateIdeaForm({
   epics,
@@ -52,7 +152,7 @@ function CreateIdeaForm({
   if (epics.length === 0) {
     return (
       <p className="queue__empty">
-        Crie primeiro uma Initiative (épico) no repositório — toda ideia nasce sob uma Initiative.
+        Crie primeiro um Épico no repositório — toda ideia (Feature) nasce sob um Épico.
       </p>
     );
   }
@@ -70,7 +170,7 @@ function CreateIdeaForm({
         className="idea-form__epic"
         value={epicNumber}
         onChange={(e) => setEpicNumber(Number(e.target.value))}
-        aria-label="Initiative pai"
+        aria-label="Épico pai"
       >
         {epics.map((epic) => (
           <option key={epic.number} value={epic.number}>
@@ -103,76 +203,120 @@ function CreateIdeaForm({
 }
 
 export function BacklogPage({ repoId, snapshot, refresh }: WorkspacePageProps) {
-  const [typeFilter, setTypeFilter] = useState('');
-  const [areaFilter, setAreaFilter] = useState('');
-  const [labelFilter, setLabelFilter] = useState('');
   const [creating, setCreating] = useState(false);
   const [brainstorm, setBrainstorm] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
 
-  // Só itens sem prioridade aparecem aqui (RFC-003 §2) — e apenas os que ainda
-  // não entraram no pipeline (etapa Backlog ou fora do board): o Backlog é a
-  // fila de IDEIAS pré-priorização, não de trabalho em execução.
-  const backlog = useMemo(
+  const byNumber = useMemo(() => itemsByNumber(snapshot.items), [snapshot.items]);
+
+  // Forest da hierarquia: raízes + filhos por número de pai, ordenados por
+  // rank (Iniciativa → Épico → Feature) e depois número.
+  const { roots, childrenMap } = useMemo(() => {
+    const hierItems = snapshot.items.filter((i) => TREE_TYPES.includes(typeSlug(i)));
+    const inTree = new Set(hierItems.map((i) => i.number));
+    const map = new Map<number, SnapshotItem[]>();
+    const rootList: SnapshotItem[] = [];
+    for (const item of hierItems) {
+      const parent = item.parentNumber;
+      if (parent != null && inTree.has(parent)) {
+        const bucket = map.get(parent);
+        if (bucket) bucket.push(item);
+        else map.set(parent, [item]);
+      } else {
+        rootList.push(item);
+      }
+    }
+    const cmp = (a: SnapshotItem, b: SnapshotItem) =>
+      (TREE_RANK[typeSlug(a)] ?? 9) - (TREE_RANK[typeSlug(b)] ?? 9) || a.number - b.number;
+    rootList.sort(cmp);
+    for (const bucket of map.values()) bucket.sort(cmp);
+    return { roots: rootList, childrenMap: map };
+  }, [snapshot.items]);
+
+  // Todas as Stories do projeto (abertas e fechadas).
+  const stories = useMemo(() => snapshot.items.filter(isStory), [snapshot.items]);
+
+  const visibleStories = useMemo(
     () =>
-      snapshot.items.filter(
-        (item) =>
-          isBacklogLevel(item) &&
-          isOpen(item) &&
-          item.priority === null &&
-          (item.stage === null || item.stage === 'Backlog'),
-      ),
-    [snapshot.items],
-  );
-
-  const areas = useMemo(
-    () => [...new Set(backlog.map((i) => i.area).filter((a): a is string => a !== null))],
-    [backlog],
-  );
-
-  const filtered = backlog.filter(
-    (item) =>
-      (!typeFilter || item.level === typeFilter) &&
-      (!areaFilter || item.area === areaFilter) &&
-      (!labelFilter ||
-        item.labels.some((l) => l.toLowerCase().includes(labelFilter.trim().toLowerCase()))),
+      selected == null
+        ? stories
+        : stories.filter((s) => isDescendantOf(s, selected, byNumber)),
+    [stories, selected, byNumber],
   );
 
   const epics = snapshot.items.filter((i) => isEpic(i) && isOpen(i));
 
-  const run = (fn: () => Promise<unknown>) => {
-    setBusy(true);
-    fn()
-      .then(() => refresh())
-      .catch((err: Error) => alert(err.message))
-      .finally(() => setBusy(false));
-  };
+  const selectedItem = selected != null ? byNumber.get(selected) ?? null : null;
+
+  const toggle = (n: number) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(n)) next.delete(n);
+      else next.add(n);
+      return next;
+    });
+
+  const columns: Column[] = [
+    {
+      header: 'Issue Id',
+      className: 'proj-table__id',
+      cell: (item) => {
+        const { href, external } = itemHref(repoId, item);
+        return (
+          <a href={href} {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}>
+            #{item.number}
+          </a>
+        );
+      },
+    },
+    { header: 'Type', cell: (item) => <TypeBadge item={item} /> },
+    {
+      header: 'Title',
+      className: 'proj-table__title',
+      cell: (item) => {
+        const { href, external } = itemHref(repoId, item);
+        return (
+          <a
+            className="proj-table__titlelink"
+            href={href}
+            {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}
+          >
+            {item.title}
+          </a>
+        );
+      },
+    },
+    { header: 'Feature', cell: (item) => ancestorCell(ancestorOfType(item, byNumber, 'feature')) },
+    { header: 'Epic', cell: (item) => ancestorCell(ancestorOfType(item, byNumber, 'epic')) },
+    {
+      header: 'Iniciativa',
+      cell: (item) => ancestorCell(ancestorOfType(item, byNumber, 'initiative')),
+    },
+    { header: 'Status', cell: (item) => (item.state === 'closed' ? 'Fechado' : 'Aberto') },
+    {
+      header: 'Etapa',
+      cell: (item) =>
+        item.stageRaw ?? item.stage ? (
+          <span className="chip chip--stage">{item.stageRaw ?? item.stage}</span>
+        ) : (
+          '—'
+        ),
+    },
+    {
+      header: 'Priority',
+      cell: (item) =>
+        item.priority ? (
+          <span className={`chip chip--${item.priority.toLowerCase()}`}>{item.priority}</span>
+        ) : (
+          '—'
+        ),
+    },
+  ];
 
   return (
     <div className="ws-page">
       <div className="ws-toolbar">
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Tipo">
-          {TYPE_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <select value={areaFilter} onChange={(e) => setAreaFilter(e.target.value)} aria-label="Área">
-          <option value="">Todas as áreas</option>
-          {areas.map((a) => (
-            <option key={a} value={a}>
-              {a}
-            </option>
-          ))}
-        </select>
-        <input
-          type="search"
-          placeholder="Filtrar por label…"
-          value={labelFilter}
-          onChange={(e) => setLabelFilter(e.target.value)}
-          aria-label="Label"
-        />
         <span className="ws-toolbar__spacer" />
         <button type="button" className="btn btn--sm" onClick={() => setBrainstorm((v) => !v)}>
           ✨ AI Brainstorm
@@ -207,49 +351,65 @@ export function BacklogPage({ repoId, snapshot, refresh }: WorkspacePageProps) {
         />
       )}
 
-      <QueueList
-        repoId={repoId}
-        items={filtered}
-        empty="Backlog limpo — nenhuma ideia sem prioridade."
-        meta={(item) => (
-          <select
-            className="queue__priosel"
-            value=""
-            disabled={busy}
-            onChange={(e) => {
-              if (e.target.value) {
-                run(() => setPriority(repoId, item.level, item.number, e.target.value as Priority));
-              }
-            }}
-            aria-label={`Prioridade de #${item.number}`}
+      <div className="bl-split">
+        <aside className="bl-tree-pane">
+          <div className="bl-pane__head">Hierarquia</div>
+          <button
+            type="button"
+            className={`bl-tree__all${selected == null ? ' bl-tree__row--selected' : ''}`}
+            onClick={() => setSelected(null)}
           >
-            <option value="">Set Priority…</option>
-            {PRIORITIES.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        )}
-        actions={(item) => [
-          {
-            label: 'Edit',
-            href:
-              item.level === 'epic' || item.level === 'feature' || item.level === 'story'
-                ? hrefForItem(repoId, item.level, item.number)
-                : item.url,
-          },
-          {
-            label: 'Delete',
-            disabled: busy,
-            onClick: () => {
-              if (confirm(`Fechar a issue #${item.number} "${item.title}"?`)) {
-                run(() => deleteWorkItem(repoId, item.level, item.number));
-              }
-            },
-          },
-        ]}
-      />
+            Todo o projeto
+          </button>
+          {roots.length === 0 ? (
+            <p className="queue__empty">Sem Iniciativas/Épicos/Features no projeto.</p>
+          ) : (
+            <ul className="bl-tree">
+              {roots.map((node) => (
+                <TreeNode
+                  key={node.number}
+                  node={node}
+                  childrenMap={childrenMap}
+                  depth={0}
+                  selected={selected}
+                  onSelect={(n) => setSelected((cur) => (cur === n ? null : n))}
+                  collapsed={collapsed}
+                  onToggle={toggle}
+                />
+              ))}
+            </ul>
+          )}
+        </aside>
+
+        <div className="bl-stories-pane">
+          <div className="bl-pane__head">
+            Stories
+            {selectedItem && (
+              <span className="bl-pane__filter">
+                · {typeOf(selectedItem)} #{selectedItem.number} {selectedItem.title}
+                <button
+                  type="button"
+                  className="bl-pane__clear"
+                  onClick={() => setSelected(null)}
+                  aria-label="Limpar filtro"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+            <span className="ws-section__count">{visibleStories.length}</span>
+          </div>
+          <ItemTable
+            items={visibleStories}
+            columns={columns}
+            empty={
+              selected == null
+                ? 'Nenhuma Story no projeto.'
+                : 'Nenhuma Story sob o item selecionado.'
+            }
+          />
+        </div>
+      </div>
     </div>
   );
 }

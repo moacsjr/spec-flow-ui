@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import type { SnapshotItem } from '@spec-flow/shared';
 import { hrefForItem } from '../../lib/router';
 import { progressPct, waitingSince } from '../../lib/workspaceSelectors';
+import { typeOf, typeSlug } from '../../lib/workItemType';
 
 export interface RowAction {
   label: string;
@@ -24,14 +25,6 @@ interface QueueListProps {
   meta?: (item: SnapshotItem) => ReactNode; // conteúdo extra por linha
   actions?: (item: SnapshotItem) => RowAction[];
 }
-
-const LEVEL_LABELS: Record<SnapshotItem['level'], string> = {
-  epic: 'Initiative',
-  feature: 'Feature',
-  story: 'Story',
-  task: 'Task',
-  unknown: 'Item',
-};
 
 // Drill-down interno para epic/feature/story; task/unknown vão ao GitHub.
 function itemHref(repoId: string, item: SnapshotItem): { href: string; external: boolean } {
@@ -66,8 +59,8 @@ export function QueueList({
         return (
           <li key={item.number} className="queue__row">
             <div className="queue__main">
-              <span className={`queue__level queue__level--${item.level}`}>
-                {LEVEL_LABELS[item.level]}
+              <span className={`queue__level queue__level--${typeSlug(item)}`}>
+                {typeOf(item)}
               </span>
               <a
                 className="queue__title"

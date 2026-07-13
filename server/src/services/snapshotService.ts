@@ -93,6 +93,14 @@ function stageRawOf(issue: GhSnapshotIssue, project: ProjectConfig | undefined):
   return values['Etapa'] ?? values['Status'] ?? null;
 }
 
+// "Story Points": campo single-select do Project (opções "1".."21"). Já vem no
+// projectFieldValues; convertemos a opção para número. null = sem estimativa.
+function pointsOf(issue: GhSnapshotIssue): number | null {
+  const raw = issue.projectFieldValues['Story Points'];
+  const n = raw != null ? Number.parseInt(raw, 10) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
 function priorityOf(labels: string[]): Priority | null {
   return (labels.find((n) => /^P[0-3]$/.test(n)) as Priority | undefined) ?? null;
 }
@@ -122,6 +130,7 @@ function toSnapshotItem(
     area: areaOf(issue.labels),
     stage,
     stageRaw,
+    points: pointsOf(issue),
     milestone: issue.milestone,
     assignees: issue.assignees.map((u) => ({ login: u.login, name: u.name ?? null })),
     parentNumber: issue.parentNumber,

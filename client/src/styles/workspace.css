@@ -418,6 +418,7 @@
   color: var(--text-3);
 }
 
+.queue__level--initiative { background: rgba(176, 138, 209, 0.22); color: var(--av-purple); }
 .queue__level--epic { background: rgba(176, 138, 209, 0.16); color: var(--av-purple); }
 .queue__level--feature { background: var(--accent-soft); color: var(--accent-light); }
 .queue__level--story { background: rgba(111, 155, 209, 0.16); color: var(--av-blue); }
@@ -794,6 +795,222 @@
   color: var(--text);
   min-width: 220px;
 }
+.proj-table__titlelink {
+  color: var(--text);
+  text-decoration: none;
+}
+.proj-table__titlelink:hover {
+  color: var(--accent-light);
+}
+/* Pai (Parent Title / Epic): número esmaecido + título. */
+.proj-table__parent {
+  color: var(--text-2);
+}
+.proj-table__parentnum {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.proj-table__actions {
+  white-space: nowrap;
+}
+
+/* Ações em linha da tabela: icon buttons + select de prioridade. */
+.table-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Icon button (Edit/Delete) — quadrado, discreto, cor no hover. */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.icon-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--text-2);
+}
+.icon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.icon-btn--danger:hover {
+  border-color: rgba(209, 111, 111, 0.5);
+  color: #d99;
+  background: rgba(209, 111, 111, 0.1);
+}
+
+/* Feature-pai no cabeçalho de grupo do Planning. */
+.ws-section__featurenum {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+/* ---- Backlog: explorador em duas colunas (árvore + tabela de stories) ---- */
+.bl-split {
+  display: grid;
+  grid-template-columns: minmax(240px, 340px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .bl-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bl-tree-pane,
+.bl-stories-pane {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.bl-tree-pane {
+  padding-bottom: 8px;
+}
+.bl-pane__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+.bl-pane__filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  color: var(--text-2);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.bl-pane__clear {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.bl-pane__clear:hover {
+  color: var(--accent);
+}
+
+/* A tabela de stories dentro do painel: sem borda dupla. */
+.bl-stories-pane .proj-table-wrap {
+  border: none;
+  border-radius: 0;
+}
+
+/* Árvore */
+.bl-tree,
+.bl-tree__children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.bl-tree {
+  padding: 4px 0;
+}
+.bl-tree__all {
+  display: block;
+  width: calc(100% - 12px);
+  margin: 6px;
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-raised);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.bl-tree__all:hover {
+  border-color: var(--border-hover);
+}
+.bl-tree__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 0;
+  border-radius: 7px;
+}
+.bl-tree__row:hover {
+  background: var(--surface);
+}
+.bl-tree__row--selected,
+.bl-tree__all.bl-tree__row--selected {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+.bl-tree__toggle {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+.bl-tree__toggle:hover {
+  color: var(--text);
+}
+.bl-tree__toggle--leaf {
+  cursor: default;
+}
+.bl-tree__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+  text-align: left;
+}
+.bl-tree__title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+}
+.bl-tree__row--selected .bl-tree__title {
+  color: var(--text);
+  font-weight: 600;
+}
 
 /* Árvore */
 .proj-tree__list {
@@ -896,4 +1113,389 @@
 }
 .proj-tree__closed {
   color: var(--text-faint);
+}
+
+/* ==================================================================
+   Planning2 — Backlog Planner (3 colunas). Tokens de tokens.css.
+   ================================================================== */
+.pl2 {
+  display: grid;
+  grid-template-columns: 290px minmax(0, 1fr) 320px;
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .pl2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pl2 .mono {
+  font-family: var(--font-mono);
+}
+.pl2-dim {
+  color: var(--text-faint);
+}
+
+/* ---- colunas laterais (árvore, milestones) ---- */
+.pl2-col {
+  min-width: 0;
+}
+.pl2-col--tree,
+.pl2-col--ms {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 6px 6px 10px;
+}
+.pl2-col--ms {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+.pl2-col__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.pl2-col__action {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.pl2-col__action:hover {
+  color: var(--accent);
+}
+
+/* contagem à direita do nó da árvore */
+.pl2-tree__count {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ---- card de métricas do nó ---- */
+.pl2-metrics {
+  margin: 14px 6px 0;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pl2-metrics__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.pl2-metrics__row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-3);
+}
+.pl2-metrics__planned {
+  color: var(--done);
+}
+.pl2-metrics__backlog {
+  color: var(--accent-light);
+}
+
+/* ---- coluna 2: story backlog ---- */
+.pl2-col--stories {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pl2-stories__head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.pl2-stories__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+.pl2-stories__filter {
+  font-size: 14px;
+  color: var(--text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pl2-stories__count {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.pl2-table__head,
+.pl2-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) 104px 120px 158px 34px;
+  gap: 12px;
+  align-items: center;
+}
+.pl2-table__head {
+  padding: 0 16px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.pl2-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pl2-row {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  cursor: grab;
+}
+.pl2-row:hover {
+  border-color: var(--border-hover);
+  background: var(--surface);
+}
+.pl2-row:active {
+  cursor: grabbing;
+}
+.pl2-row--dragging {
+  opacity: 0.45;
+}
+.pl2-row__id {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-3);
+  text-decoration: none;
+}
+.pl2-row__id .mono {
+  color: var(--text-3);
+}
+.pl2-row__id:hover .mono {
+  color: var(--accent-light);
+}
+.pl2-row__title {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pl2-row__feature {
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pl2-row__ms,
+.pl2-row__actions {
+  position: relative;
+}
+.pl2-row__actions {
+  text-align: center;
+}
+
+/* pill de milestone (dropdown por teclado) */
+.pl2-pillbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 10px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--well);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.pl2-pillbtn:hover {
+  border-color: var(--border-hover);
+}
+.pl2-pillbtn > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pl2-caret {
+  font-size: 8px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.pl2-iconbtn {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+.pl2-iconbtn:hover {
+  background: var(--border);
+  color: var(--text-2);
+}
+
+/* dropdown / menu de ações */
+.pl2-pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+.pl2-pop--right {
+  left: auto;
+  right: 0;
+}
+.pl2-pop__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  font-size: 13px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+  text-decoration: none;
+}
+.pl2-pop__item:hover {
+  background: var(--accent-soft);
+  color: var(--accent-light);
+}
+.pl2-pop__item--muted {
+  color: var(--text-muted);
+}
+
+.pl2-draghint {
+  padding: 10px 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* ---- coluna 3: cards de milestone ---- */
+.pl2-mscard {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pl2-mscard:hover {
+  border-color: var(--border-hover);
+}
+.pl2-mscard--drop {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.pl2-mscard__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pl2-mscard__name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+.pl2-mscard__eta {
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent-light);
+}
+.pl2-mscard__bar {
+  height: 7px;
+  border-radius: 999px;
+  background: var(--track);
+  overflow: hidden;
+}
+.pl2-mscard__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--done);
+  transition: width 0.15s ease;
+}
+.pl2-mscard__stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-3);
+}
+.pl2-dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 0;
+  border: 1px dashed var(--border-strong);
+  border-radius: 9px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.pl2-mscard--drop .pl2-dropzone {
+  border-color: var(--accent-border);
+  color: var(--accent-light);
+}
+.pl2-msform {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+}
+.pl2-msform__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }

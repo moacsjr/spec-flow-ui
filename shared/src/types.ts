@@ -309,6 +309,7 @@ export interface SnapshotItem {
   area: string | null;
   stage: StageName | null; // normalizado; null = fora do board e issue aberta
   stageRaw: string | null; // nome cru da opção no board (ex.: "📋 Spec")
+  points: number | null; // campo "Story Points" do Project (single-select); null = sem estimativa
   milestone: { number: number; title: string } | null;
   assignees: { login: string; name: string | null }[];
   parentNumber: number | null;
