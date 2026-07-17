@@ -15,6 +15,7 @@ import type {
 } from '@spec-flow/shared';
 import { STAGE_NAMES, WORK_ITEM_TYPES } from '@spec-flow/shared';
 import {
+  archiveWorkItemSubtreeForRepository,
   createFeatureForRepository,
   createWorkItemForRepository,
   deleteWorkItemForRepository,
@@ -201,6 +202,37 @@ export async function deleteRepositoryWorkItem(
   try {
     await deleteWorkItemForRepository(tenantOf(req).tenantId, params.repoId, params.n);
     res.status(204).end();
+  } catch (err) {
+    if (err instanceof HttpError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
+// POST /api/repositories/:id/workitems/:level/:number/archive → arquiva (fecha)
+// o item e todos os descendentes. O `:level` é só decorativo (Initiative não é
+// um Level válido), então validamos apenas repo + número.
+export async function archiveRepositoryWorkItem(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const { id, number } = req.params;
+  if (!isValidRepoId(id)) {
+    res.status(400).json({ error: `Repositório inválido: "${id}".` });
+    return;
+  }
+  const n = Number(number);
+  if (!Number.isInteger(n) || n <= 0) {
+    res.status(400).json({ error: `Número inválido: "${number}".` });
+    return;
+  }
+
+  try {
+    const result = await archiveWorkItemSubtreeForRepository(tenantOf(req).tenantId, id, n);
+    res.json(result);
   } catch (err) {
     if (err instanceof HttpError) {
       res.status(err.status).json({ error: err.message });

@@ -1779,3 +1779,31 @@
   background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
   padding: 4px 16px; font-size: 14px; color: var(--text-2); line-height: 1.6;
 }
+
+/* Botão de arquivar no nó da árvore do Backlog (revelado no hover). */
+.bl-tree__archive {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 5px;
+  margin-right: 4px;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s, background 0.12s;
+}
+.bl-tree__row:hover .bl-tree__archive,
+.bl-tree__archive:focus-visible {
+  opacity: 1;
+}
+.bl-tree__archive:hover {
+  color: var(--text);
+  background: var(--surface-raised);
+}
+.bl-tree__archive:disabled {
+  opacity: 0.4;
+  cursor: progress;
+}

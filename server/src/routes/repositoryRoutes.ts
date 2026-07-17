@@ -10,6 +10,7 @@ import {
   postRepository,
 } from '../controllers/RepositoryController.ts';
 import {
+  archiveRepositoryWorkItem,
   createRepositoryFeature,
   createRepositoryWorkItem,
   deleteRepositoryWorkItem,
@@ -104,6 +105,12 @@ repositoryRoutes.patch('/repositories/:id/workitems/:level/:number/stage', setWo
 // DELETE /api/repositories/:id/workitems/:level/:number → fecha a issue
 // ("Delete" do Backlog do PM).
 repositoryRoutes.delete('/repositories/:id/workitems/:level/:number', deleteRepositoryWorkItem);
+
+// POST /api/repositories/:id/workitems/:level/:number/archive → arquiva (fecha)
+// o item + todos os descendentes (Backlog do PM).
+repositoryRoutes.post('/repositories/:id/workitems/:level/:number/archive', (req, res, next) => {
+  archiveRepositoryWorkItem(req, res, next).catch(next);
+});
 
 // PATCH /api/repositories/:id/workitems/:level/:number → edita título/corpo da issue.
 repositoryRoutes.patch('/repositories/:id/workitems/:level/:number', updateRepositoryWorkItem);

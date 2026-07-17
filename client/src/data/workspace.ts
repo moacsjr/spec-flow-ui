@@ -78,6 +78,16 @@ export async function deleteWorkItem(
   await request(itemBase(repoId, level, number), { method: 'DELETE' });
 }
 
+// Arquiva (fecha) um item e todos os descendentes. Devolve quantos foram fechados.
+export async function archiveWorkItem(
+  repoId: string,
+  level: string,
+  number: number,
+): Promise<{ archived: number }> {
+  const json = await request(`${itemBase(repoId, level, number)}/archive`, { method: 'POST' });
+  return json as { archived: number };
+}
+
 // Reparent (drag-and-drop da árvore na tela Project): define `parentNumber` como
 // pai de `childNumber`. O server valida a hierarquia permitida e atualiza a
 // sub-issue nativa. Encadeia chamadas ao GitHub → timeout maior.

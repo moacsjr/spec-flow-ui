@@ -22,7 +22,7 @@ import {
   typeSlug,
 } from '../../../lib/workItemType';
 import { createFeature } from '../../../data/workItem';
-import { setPriority } from '../../../data/workspace';
+import { archiveWorkItem, setPriority } from '../../../data/workspace';
 
 // Checkbox com estado "indeterminado" (parcialmente selecionado) — só via ref.
 function TriCheckbox({
@@ -76,6 +76,26 @@ function ancestorCell(item: SnapshotItem | null) {
 
 // ---------- Árvore da hierarquia ----------
 
+function ArchiveIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="2" y="4" width="20" height="5" rx="1" />
+      <path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9" />
+      <path d="M10 13h4" />
+    </svg>
+  );
+}
+
 interface TreeNodeProps {
   node: SnapshotItem;
   childrenMap: Map<number, SnapshotItem[]>;
@@ -84,17 +104,13 @@ interface TreeNodeProps {
   onSelect: (n: number) => void;
   collapsed: Set<number>;
   onToggle: (n: number) => void;
+  onArchive: (node: SnapshotItem) => void;
+  archiving: boolean;
 }
 
-function TreeNode({
-  node,
-  childrenMap,
-  depth,
-  selected,
-  onSelect,
-  collapsed,
-  onToggle,
-}: TreeNodeProps) {
+function TreeNode(props: TreeNodeProps) {
+  const { node, childrenMap, depth, selected, onSelect, collapsed, onToggle, onArchive, archiving } =
+    props;
   const kids = childrenMap.get(node.number) ?? [];
   const hasKids = kids.length > 0;
   const isCollapsed = collapsed.has(node.number);
@@ -128,20 +144,24 @@ function TreeNode({
           <TypeBadge item={node} />
           <span className="bl-tree__title">{node.title}</span>
         </button>
+        <button
+          type="button"
+          className="bl-tree__archive"
+          title="Arquivar (fecha o item e todos os filhos)"
+          aria-label={`Arquivar ${node.title}`}
+          disabled={archiving}
+          onClick={(e) => {
+            e.stopPropagation();
+            onArchive(node);
+          }}
+        >
+          <ArchiveIcon />
+        </button>
       </div>
       {hasKids && !isCollapsed && (
         <ul className="bl-tree__children">
           {kids.map((kid) => (
-            <TreeNode
-              key={kid.number}
-              node={kid}
-              childrenMap={childrenMap}
-              depth={depth + 1}
-              selected={selected}
-              onSelect={onSelect}
-              collapsed={collapsed}
-              onToggle={onToggle}
-            />
+            <TreeNode key={kid.number} {...props} node={kid} depth={depth + 1} />
           ))}
         </ul>
       )}
@@ -240,13 +260,15 @@ export function BacklogPage({ repoId, snapshot, refresh }: WorkspacePageProps) {
   const [picked, setPicked] = useState<Set<number>>(new Set()); // stories marcadas p/ ação em lote
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set()); // linhas com gravação em andamento
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [archiving, setArchiving] = useState(false);
 
   const byNumber = useMemo(() => itemsByNumber(snapshot.items), [snapshot.items]);
 
   // Forest da hierarquia: raízes + filhos por número de pai, ordenados por
-  // rank (Iniciativa → Épico → Feature) e depois número.
+  // rank (Iniciativa → Épico → Feature) e depois número. Só itens abertos —
+  // arquivar (fechar) remove o item do Backlog.
   const { roots, childrenMap } = useMemo(() => {
-    const hierItems = snapshot.items.filter((i) => TREE_TYPES.includes(typeSlug(i)));
+    const hierItems = snapshot.items.filter((i) => TREE_TYPES.includes(typeSlug(i)) && isOpen(i));
     const inTree = new Set(hierItems.map((i) => i.number));
     const map = new Map<number, SnapshotItem[]>();
     const rootList: SnapshotItem[] = [];
@@ -267,8 +289,8 @@ export function BacklogPage({ repoId, snapshot, refresh }: WorkspacePageProps) {
     return { roots: rootList, childrenMap: map };
   }, [snapshot.items]);
 
-  // Todas as Stories do projeto (abertas e fechadas).
-  const stories = useMemo(() => snapshot.items.filter(isStory), [snapshot.items]);
+  // Stories abertas do projeto (arquivadas/fechadas saem do Backlog).
+  const stories = useMemo(() => snapshot.items.filter((i) => isStory(i) && isOpen(i)), [snapshot.items]);
 
   const visibleStories = useMemo(
     () =>
@@ -289,6 +311,29 @@ export function BacklogPage({ repoId, snapshot, refresh }: WorkspacePageProps) {
       else next.add(n);
       return next;
     });
+
+  // Arquiva (fecha) o nó + todos os descendentes abertos, após confirmação.
+  const handleArchive = (node: SnapshotItem) => {
+    const total = snapshot.items.filter(
+      (i) => isOpen(i) && (i.number === node.number || isDescendantOf(i, node.number, byNumber)),
+    ).length;
+    const descendants = total - 1;
+    const msg =
+      `Arquivar "${node.title}"?\n\n` +
+      (descendants > 0
+        ? `Serão fechadas ${total} issues (o item e ${descendants} descendente(s) aberto(s)).`
+        : 'Esta issue será fechada.') +
+      '\n\nVocê pode reabri-las no GitHub depois.';
+    if (!confirm(msg)) return;
+    setArchiving(true);
+    archiveWorkItem(repoId, typeSlug(node), node.number)
+      .then(() => {
+        if (selected === node.number) setSelected(null);
+        refresh();
+      })
+      .catch((err: Error) => alert(err.message))
+      .finally(() => setArchiving(false));
+  };
 
   const busy = savingIds.size > 0 || bulkSaving;
 
@@ -503,6 +548,8 @@ export function BacklogPage({ repoId, snapshot, refresh }: WorkspacePageProps) {
                   onSelect={(n) => setSelected((cur) => (cur === n ? null : n))}
                   collapsed={collapsed}
                   onToggle={toggle}
+                  onArchive={handleArchive}
+                  archiving={archiving}
                 />
               ))}
             </ul>
