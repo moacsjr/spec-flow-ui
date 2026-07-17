@@ -326,13 +326,19 @@ export function BacklogPage({ repoId, snapshot, refresh }: WorkspacePageProps) {
       '\n\nVocê pode reabri-las no GitHub depois.';
     if (!confirm(msg)) return;
     setArchiving(true);
+    if (selected === node.number) setSelected(null);
     archiveWorkItem(repoId, typeSlug(node), node.number)
-      .then(() => {
-        if (selected === node.number) setSelected(null);
+      .catch(() =>
+        // Subárvores grandes podem estourar o timeout do gateway enquanto o
+        // fechamento continua no servidor — o refresh abaixo reflete o estado real.
+        alert(
+          'O arquivamento demorou mais que o esperado e pode ainda estar concluindo no servidor. A lista será atualizada.',
+        ),
+      )
+      .finally(() => {
+        setArchiving(false);
         refresh();
-      })
-      .catch((err: Error) => alert(err.message))
-      .finally(() => setArchiving(false));
+      });
   };
 
   const busy = savingIds.size > 0 || bulkSaving;
