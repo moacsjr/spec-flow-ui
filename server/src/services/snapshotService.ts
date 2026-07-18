@@ -109,6 +109,14 @@ function rankOf(issue: GhSnapshotIssue): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// "Estimate": campo numérico do Project com a estimativa em pontos da Feature
+// (por IA na aprovação da spec, ou manual). null = sem estimativa.
+function estimateOf(issue: GhSnapshotIssue): number | null {
+  const raw = issue.projectFieldValues['Estimate'];
+  const n = raw != null ? Number.parseFloat(raw) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
 function priorityOf(labels: string[]): Priority | null {
   return (labels.find((n) => /^P[0-3]$/.test(n)) as Priority | undefined) ?? null;
 }
@@ -140,6 +148,7 @@ function toSnapshotItem(
     stageRaw,
     points: pointsOf(issue),
     rank: rankOf(issue),
+    estimate: estimateOf(issue),
     milestone: issue.milestone,
     assignees: issue.assignees.map((u) => ({ login: u.login, name: u.name ?? null })),
     parentNumber: issue.parentNumber,

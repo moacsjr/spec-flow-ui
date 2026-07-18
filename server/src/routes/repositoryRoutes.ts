@@ -17,7 +17,9 @@ import {
   createRepositoryFeature,
   createRepositoryWorkItem,
   deleteRepositoryWorkItem,
+  getEstimatesMeta,
   getStageAges,
+  patchFeatureEstimate,
   patchWorkItemRank,
   prioritizeRepositoryWorkItem,
   getRepositoryWorkItem,
@@ -31,6 +33,7 @@ import {
 import {
   deleteRepositoryMilestone,
   getRepositoryMilestones,
+  patchFeatureMilestone,
   patchRepositoryMilestone,
   postMilestoneReleaseNotes,
   postRepositoryMilestone,
@@ -149,6 +152,18 @@ repositoryRoutes.patch('/repositories/:id/workitems/:level/:number/rank', (req, 
 });
 repositoryRoutes.get('/repositories/:id/stage-ages', (req, res, next) => {
   getStageAges(req, res, next).catch(next);
+});
+
+// Planning: milestone da Feature com cascata (Stories/Bugs filhos), estimativa
+// manual e metadados batch das estimativas.
+repositoryRoutes.patch('/repositories/:id/workitems/feature/:number/milestone', (req, res, next) => {
+  patchFeatureMilestone(req, res, next).catch(next);
+});
+repositoryRoutes.patch('/repositories/:id/workitems/feature/:number/estimate', (req, res, next) => {
+  patchFeatureEstimate(req, res, next).catch(next);
+});
+repositoryRoutes.get('/repositories/:id/estimates-meta', (req, res, next) => {
+  getEstimatesMeta(req, res, next).catch(next);
 });
 
 // PATCH /api/repositories/:id/workitems/:level/:number → edita título/corpo da issue.

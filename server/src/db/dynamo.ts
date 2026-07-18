@@ -447,6 +447,62 @@ export async function updateRefineJob(
   );
 }
 
+// ---------- Metadados da estimativa por IA (tela Planning) ----------
+// O VALOR fica no campo numérico "Estimate" do Projects v2 (sem lock-in); aqui
+// vive só a origem (ai|manual), a versão da spec usada e o marcador de spec
+// desatualizada (origem manual não é reestimada — só sinalizada).
+
+export type EstimateOrigin = 'ai' | 'manual';
+
+export interface EstimateMetaRecord {
+  tenantId: string;
+  repoId: string;
+  issueNumber: number;
+  origin: EstimateOrigin;
+  specSha: string | null; // commit da spec usado na estimativa
+  stale: boolean; // spec mudou depois de uma estimativa manual
+  updatedAt: string; // ISO
+}
+
+const estimateMetaKey = (t: { tenantId: string; repoId: string; issueNumber: number }) => ({
+  PK: `TENANT#${t.tenantId}`,
+  SK: `ESTMETA#${t.repoId}#${t.issueNumber}`,
+});
+
+export async function putEstimateMeta(rec: EstimateMetaRecord): Promise<void> {
+  await doc().send(
+    new PutCommand({ TableName: TABLE, Item: { ...estimateMetaKey(rec), ...rec } }),
+  );
+}
+
+export async function getEstimateMeta(
+  tenantId: string,
+  repoId: string,
+  issueNumber: number,
+): Promise<EstimateMetaRecord | null> {
+  const res = await doc().send(
+    new GetCommand({ TableName: TABLE, Key: estimateMetaKey({ tenantId, repoId, issueNumber }) }),
+  );
+  return (res.Item as EstimateMetaRecord | undefined) ?? null;
+}
+
+export async function queryEstimateMeta(
+  tenantId: string,
+  repoId: string,
+): Promise<EstimateMetaRecord[]> {
+  const res = await doc().send(
+    new QueryCommand({
+      TableName: TABLE,
+      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+      ExpressionAttributeValues: {
+        ':pk': `TENANT#${tenantId}`,
+        ':sk': `ESTMETA#${repoId}#`,
+      },
+    }),
+  );
+  return (res.Items ?? []) as EstimateMetaRecord[];
+}
+
 // ---------- Transições de etapa (tempo na etapa — Prioritization etc.) ----------
 // Um registro por item+etapa com o momento da ENTRADA (reentrada sobrescreve).
 // Gravado por toda mutação de etapa que passa pelo backend; itens movidos por

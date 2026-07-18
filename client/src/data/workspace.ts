@@ -176,6 +176,53 @@ export async function fetchStageAges(repoId: string, stage: StageName): Promise<
   return (json as { ages: StageAge[] }).ages;
 }
 
+// ---- Tela Planning do PM (composição de releases) ----
+
+export interface CascadeItemResult {
+  number: number;
+  ok: boolean;
+  error?: string;
+}
+
+// Milestone da FEATURE com cascata para Stories/Bugs filhos. Falha parcial
+// reverte a feature inteira no backend (ok=false + resultado por sub-item).
+export async function setFeatureMilestone(
+  repoId: string,
+  featureNumber: number,
+  milestoneNumber: number | null,
+): Promise<{ ok: boolean; results: CascadeItemResult[] }> {
+  const json = await request(`${itemBase(repoId, 'feature', featureNumber)}/milestone`, {
+    method: 'PATCH',
+    payload: { milestoneNumber },
+    timeoutMs: 60_000,
+  });
+  return json as { ok: boolean; results: CascadeItemResult[] };
+}
+
+// Override manual da estimativa (origem manual; a IA não sobrescreve).
+export async function setEstimate(
+  repoId: string,
+  featureNumber: number,
+  points: number,
+): Promise<void> {
+  await request(`${itemBase(repoId, 'feature', featureNumber)}/estimate`, {
+    method: 'PATCH',
+    payload: { points },
+    timeoutMs: 30_000,
+  });
+}
+
+export interface EstimateMeta {
+  issueNumber: number;
+  origin: 'ai' | 'manual';
+  stale: boolean;
+}
+
+export async function fetchEstimatesMeta(repoId: string): Promise<EstimateMeta[]> {
+  const json = await request(`/api/repositories/${repoId}/estimates-meta`, { method: 'GET' });
+  return (json as { estimates: EstimateMeta[] }).estimates;
+}
+
 // ---- Tela Specification do PM (revisão do spec.md) ----
 
 const specBase = (repoId: string, n: number): string =>

@@ -30,6 +30,7 @@ import { HttpError } from '../lib/errors.ts';
 import { invalidateSnapshot } from '../lib/snapshotCache.ts';
 import { configForRepository, getRepositoryOr404 } from './repositoryService.ts';
 import { resolveFeaturePaths, setStageForRepository } from './workItemService.ts';
+import { triggerEstimate } from './estimateService.ts';
 
 // Label aplicada pelo Tech Leader ao devolver uma spec (convenção compartilhada).
 export const CHANGES_REQUESTED_LABEL = 'spec:changes-requested';
@@ -205,6 +206,8 @@ export async function approveSpec(
   await setIssueMilestone(config, number, milestoneNumber);
   await removeLabel(config, number, CHANGES_REQUESTED_LABEL);
   await setStageForRepository(tenantId, repoId, number, 'Plan');
+  // Enfileira a estimativa por IA da Feature (tela Planning). Fire-and-forget.
+  triggerEstimate(tenantId, repoId, number);
   invalidateSnapshot(tenantId, repoId);
 }
 

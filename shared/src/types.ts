@@ -314,6 +314,7 @@ export interface SnapshotItem {
   stageRaw: string | null; // nome cru da opção no board (ex.: "📋 Spec")
   points: number | null; // campo "Story Points" do Project (single-select); null = sem estimativa
   rank: number | null; // campo numérico "Rank" do Project (ordem da Prioritization); null = sem rank
+  estimate: number | null; // campo numérico "Estimate" do Project (estimativa por IA/manual); null = sem estimativa
   milestone: { number: number; title: string } | null;
   assignees: { login: string; name: string | null }[];
   parentNumber: number | null;

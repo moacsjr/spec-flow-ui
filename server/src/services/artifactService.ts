@@ -30,6 +30,7 @@ import { consumeRefineOrThrow } from './quotaService.ts';
 import { tenantOpenrouterKey } from './settingsService.ts';
 import { configForRepository, getRepositoryOr404 } from './repositoryService.ts';
 import { loadWorkItem, resolveFeaturePaths } from './workItemService.ts';
+import { onSpecSaved } from './estimateService.ts';
 
 // Nome do label do spec-wave que dispara a Action de geração do artefato.
 const LABEL: Record<ArtifactKind, string> = {
@@ -243,5 +244,7 @@ export async function saveArtifact(
   const config = await configForRepository(await getRepositoryOr404(tenantId, id));
   const path = await pathFor(config, number, kind);
   await putFileContent(config, path, content, `docs(${kind}): atualiza ${path} via UI`);
+  // Spec mudou: reestima (origem ai) ou marca stale (origem manual). Fire-and-forget.
+  if (kind === 'spec') onSpecSaved(tenantId, id, number);
   return loadWorkItem(config, 'feature', number);
 }

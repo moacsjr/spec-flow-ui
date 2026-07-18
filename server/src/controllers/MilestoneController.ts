@@ -9,6 +9,7 @@ import {
   createMilestoneForRepository,
   deleteMilestoneForRepository,
   listMilestonesForRepository,
+  setFeatureMilestoneForRepository,
   setStoryMilestoneForRepository,
   updateMilestoneForRepository,
 } from '../services/milestoneService.ts';
@@ -199,6 +200,52 @@ export async function postMilestoneReleaseNotes(
   try {
     const content = await generateReleaseNotes(tenantOf(req).tenantId, repoId, milestoneNumber);
     res.json({ content });
+  } catch (err) {
+    if (err instanceof HttpError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
+// PATCH /api/repositories/:id/workitems/feature/:number/milestone — atribui/remove
+// o milestone da FEATURE com cascata p/ Stories e Bugs filhos (tela Planning).
+// Corpo: { milestoneNumber: number | null }. Resposta: { ok, results }.
+export async function patchFeatureMilestone(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const repoId = repoIdOr400(req, res);
+  if (!repoId) return;
+  const featureNumber = positiveIntOr400(res, req.params.number, 'Número da feature');
+  if (featureNumber === null) return;
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  if (!('milestoneNumber' in body)) {
+    res.status(400).json({ error: 'Informe milestoneNumber (número do milestone ou null).' });
+    return;
+  }
+  let milestoneNumber: number | null = null;
+  if (body.milestoneNumber !== null) {
+    const n = Number(body.milestoneNumber);
+    if (!Number.isInteger(n) || n <= 0) {
+      res.status(400).json({ error: `milestoneNumber inválido: "${String(body.milestoneNumber)}".` });
+      return;
+    }
+    milestoneNumber = n;
+  }
+
+  try {
+    res.json(
+      await setFeatureMilestoneForRepository(
+        tenantOf(req).tenantId,
+        repoId,
+        featureNumber,
+        milestoneNumber,
+      ),
+    );
   } catch (err) {
     if (err instanceof HttpError) {
       res.status(err.status).json({ error: err.message });

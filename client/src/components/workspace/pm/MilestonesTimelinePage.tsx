@@ -721,7 +721,7 @@ function MilestoneDrawer({
       <div className="mst-drawer__foot">
         <a
           className="btn btn--accent mst-cta"
-          href={hrefForWorkspace('pm', 'planning2', { milestone: row.number })}
+          href={hrefForWorkspace('pm', 'planning')}
         >
           Abrir Planejamento →
         </a>

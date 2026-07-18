@@ -33,6 +33,7 @@ import {
   updateWorkItemForRepository,
 } from '../services/workItemService.ts';
 import { setDisplayOrderForRepository } from '../services/snapshotService.ts';
+import { listEstimateMeta, setManualEstimate } from '../services/estimateService.ts';
 import { HttpError } from '../lib/errors.ts';
 import { isValidRepoId } from '../lib/validation.ts';
 import { tenantOf } from '../middleware/auth.ts';
@@ -384,6 +385,53 @@ export async function patchWorkItemRank(
       res.status(err.status).json({ error: err.message });
       return;
     }
+    next(err);
+  }
+}
+
+// PATCH /api/repositories/:id/workitems/feature/:number/estimate — { points }.
+// Override manual da estimativa (origem manual; não é sobrescrita pela IA).
+export async function patchFeatureEstimate(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const id = repoIdParamOr400(req, res);
+  if (!id) return;
+  const n = Number(req.params.number);
+  if (!Number.isInteger(n) || n <= 0) {
+    res.status(400).json({ error: `Número inválido: "${req.params.number}".` });
+    return;
+  }
+  const points = Number(((req.body ?? {}) as Record<string, unknown>).points);
+  if (!Number.isFinite(points) || points < 0) {
+    res.status(400).json({ error: 'points deve ser um número ≥ 0.' });
+    return;
+  }
+
+  try {
+    await setManualEstimate(tenantOf(req).tenantId, id, n, points);
+    res.status(204).end();
+  } catch (err) {
+    if (err instanceof HttpError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
+// GET /api/repositories/:id/estimates-meta → { estimates: [{issueNumber, origin, stale}] }
+export async function getEstimatesMeta(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const id = repoIdParamOr400(req, res);
+  if (!id) return;
+  try {
+    res.json({ estimates: await listEstimateMeta(tenantOf(req).tenantId, id) });
+  } catch (err) {
     next(err);
   }
 }
