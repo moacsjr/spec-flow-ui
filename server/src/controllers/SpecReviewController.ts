@@ -10,6 +10,7 @@ import {
   approveSpec,
   getSpecBlob,
   getSpecMeta,
+  getSpecSectionForRepository,
   getSpecStatus,
   listReviewComments,
   replyToReviewComment,
@@ -101,6 +102,22 @@ export async function getFeatureSpecStatus(req: Request, res: Response, next: Ne
   if (!p) return;
   try {
     res.json(await getSpecStatus(tenantOf(req).tenantId, p.repoId, p.n));
+  } catch (err) {
+    handle(res, next, err);
+  }
+}
+
+// GET .../feature/:number/spec-section?heading=criterios → { heading, content, hasSpec }
+export async function getFeatureSpecSection(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const p = paramsOr400(req, res);
+  if (!p) return;
+  const heading = typeof req.query.heading === 'string' ? req.query.heading.trim() : '';
+  if (!heading) {
+    res.status(400).json({ error: 'Informe o heading da seção (?heading=…).' });
+    return;
+  }
+  try {
+    res.json(await getSpecSectionForRepository(tenantOf(req).tenantId, p.repoId, p.n, heading));
   } catch (err) {
     handle(res, next, err);
   }

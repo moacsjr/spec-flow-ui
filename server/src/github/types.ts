@@ -78,6 +78,7 @@ export interface GhSnapshotIssue {
   url: string;
   state: 'OPEN' | 'CLOSED';
   createdAt: string;
+  closedAt: string | null;
   labels: string[];
   assignees: GhUser[];
   milestone: { number: number; title: string } | null;

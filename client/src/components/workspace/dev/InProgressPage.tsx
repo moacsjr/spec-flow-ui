@@ -191,9 +191,9 @@ export function InProgressPage({ repoId, snapshot, milestoneNumber, refresh }: W
                                 return next;
                               })
                             }
-                            title="Este item voltou do QA — clique para ver o motivo"
+                            title={`Este item voltou ${qa.origin === 'uat' ? 'da Homologação (PM)' : 'do QA (TL)'} — clique para ver o motivo`}
                           >
-                            ↩ retornou do QA
+                            ↩ retornou {qa.origin === 'uat' ? 'da homologação' : 'do QA'}
                           </button>
                         )}
                       </header>

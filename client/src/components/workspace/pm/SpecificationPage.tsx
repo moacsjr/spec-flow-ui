@@ -233,9 +233,14 @@ export function SpecificationPage({
   repoId,
   snapshot,
   refresh,
+  query,
   refinePlaceholder = 'Descreva o ajuste em linguagem natural',
 }: WorkspacePageProps & SpecificationPageExtraProps) {
-  const [selected, setSelected] = useState<number | null>(null);
+  // Seleção inicial via ?feature=<n> (links da Homologação e do Dashboard).
+  const [selected, setSelected] = useState<number | null>(() => {
+    const n = Number(query?.feature);
+    return Number.isInteger(n) && n > 0 ? n : null;
+  });
   const [metaBy, setMetaBy] = useState<Map<number, SpecMeta>>(new Map());
   const [statusBy, setStatusBy] = useState<Map<number, SpecStatus>>(new Map());
   const [commentsBy, setCommentsBy] = useState<Map<number, ReviewComment[]>>(new Map());

@@ -153,6 +153,7 @@ function toSnapshotItem(
     assignees: issue.assignees.map((u) => ({ login: u.login, name: u.name ?? null })),
     parentNumber: issue.parentNumber,
     createdAt: issue.createdAt,
+    closedAt: issue.closedAt,
     progress: issue.subIssuesSummary,
     prs: issue.prs.map((pr) => ({
       number: pr.number,

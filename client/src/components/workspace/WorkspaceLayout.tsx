@@ -26,6 +26,7 @@ import { PrioritizationPage } from './pm/PrioritizationPage';
 import { SpecificationPage as PmSpecificationPage } from './pm/SpecificationPage';
 import { PlanningPage } from './pm/PlanningPage';
 import { MilestonesTimelinePage } from './pm/MilestonesTimelinePage';
+import { HomologationPage } from './pm/HomologationPage';
 import { PmProgressPage } from './pm/ProgressPage';
 import { TechDashboard } from './tech/TechDashboard';
 import { SpecificationPage } from './tech/SpecificationPage';
@@ -53,6 +54,7 @@ const PAGES: Record<WorkspaceRole, Record<string, ComponentType<WorkspacePagePro
     specification: PmSpecificationPage,
     planning: PlanningPage,
     milestones: MilestonesTimelinePage,
+    homologation: HomologationPage,
     progress: PmProgressPage,
   },
   tech: {

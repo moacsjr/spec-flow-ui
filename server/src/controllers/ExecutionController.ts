@@ -14,6 +14,8 @@ import {
   setStoryPointsForRepository,
   setTaskStateForRepository,
   startWorkForRepository,
+  uatApproveForRepository,
+  uatReturnForRepository,
 } from '../services/executionService.ts';
 
 function paramsOr400(req: Request, res: Response): { repoId: string; n: number } | null {
@@ -130,6 +132,41 @@ export async function postQaReturn(req: Request, res: Response, next: NextFuncti
   try {
     res.json(
       await qaReturnForRepository(
+        tenantOf(req).tenantId,
+        p.repoId,
+        p.n,
+        body.reason.trim(),
+        body.createBug === true,
+      ),
+    );
+  } catch (err) {
+    handle(res, next, err);
+  }
+}
+
+// POST .../workitems/:level/:number/uat-approve → { featureClosed, featureNumber, pendingCheck }
+export async function postUatApprove(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const p = paramsOr400(req, res);
+  if (!p) return;
+  try {
+    res.json(await uatApproveForRepository(tenantOf(req).tenantId, p.repoId, p.n));
+  } catch (err) {
+    handle(res, next, err);
+  }
+}
+
+// POST .../workitems/:level/:number/uat-return — { reason, createBug } → { bugNumber }
+export async function postUatReturn(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const p = paramsOr400(req, res);
+  if (!p) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  if (typeof body.reason !== 'string' || body.reason.trim().length < 10) {
+    res.status(400).json({ error: 'Informe o motivo (mínimo 10 caracteres).' });
+    return;
+  }
+  try {
+    res.json(
+      await uatReturnForRepository(
         tenantOf(req).tenantId,
         p.repoId,
         p.n,
