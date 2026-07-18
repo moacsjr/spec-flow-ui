@@ -259,6 +259,37 @@ export async function getPlanStatus(
   return { hasPlan: content !== null, latestRun };
 }
 
+// ---- Validação do plano (Action validate.yml, disparada pelo spec-wave:ready) ----
+// O relatório real da Action não é estruturado; adaptamos o run ao contrato
+// genérico { passed, issues[] } (falha → issue única com link para a execução).
+
+export interface PlanValidation {
+  latestRun: GhWorkflowRun | null;
+  report: { passed: boolean; issues: { document: 'spec' | 'plan'; message: string }[] } | null;
+}
+
+export async function getPlanValidation(
+  tenantId: string,
+  repoId: string,
+): Promise<PlanValidation> {
+  const config = await configFor(tenantId, repoId);
+  const latestRun = await fetchLatestWorkflowRun(config, 'validate.yml').catch(() => null);
+  let report: PlanValidation['report'] = null;
+  if (latestRun?.conclusion === 'success') report = { passed: true, issues: [] };
+  else if (latestRun?.conclusion === 'failure') {
+    report = {
+      passed: false,
+      issues: [
+        {
+          document: 'plan',
+          message: 'A validação de spec.md + plan.md reprovou — abra a execução para o detalhe.',
+        },
+      ],
+    };
+  }
+  return { latestRun, report };
+}
+
 // ---- Pré-review por IA ----
 
 async function runPreReview(tenantId: string, repoId: string, number: number): Promise<void> {

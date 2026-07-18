@@ -10,6 +10,7 @@ import {
   createDraft,
   getOrStartPreReview,
   getPlanStatus,
+  getPlanValidation,
   getReviewCycleView,
   listDrafts,
   removeDraft,
@@ -17,6 +18,13 @@ import {
   returnToPm,
   updateDraft,
 } from '../services/techReviewService.ts';
+import {
+  getProposalFor,
+  saveProposalStories,
+  startGenerateProposal,
+  startMaterialize,
+} from '../services/decompositionService.ts';
+import type { ProposalStory } from '../db/dynamo.ts';
 
 function paramsOr400(req: Request, res: Response): { repoId: string; n: number } | null {
   const { id, number } = req.params;
@@ -186,6 +194,109 @@ export async function postPreReviewRun(
   try {
     const rec = await rerunPreReview(tenantOf(req).tenantId, p.repoId, p.n);
     res.status(202).json({ status: rec.status });
+  } catch (err) {
+    handle(res, next, err);
+  }
+}
+
+
+// GET /repositories/:id/plan-validation → { latestRun, report } (validate.yml)
+export async function getPlanValidationHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const { id } = req.params;
+  if (!isValidRepoId(id)) {
+    res.status(400).json({ error: `Repositório inválido: "${id}".` });
+    return;
+  }
+  try {
+    res.json(await getPlanValidation(tenantOf(req).tenantId, id));
+  } catch (err) {
+    handle(res, next, err);
+  }
+}
+
+// POST .../feature/:number/decomposition/generate → 202 (gera/regenera a proposta)
+export async function postDecompositionGenerate(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const p = paramsOr400(req, res);
+  if (!p) return;
+  try {
+    await startGenerateProposal(tenantOf(req).tenantId, p.repoId, p.n);
+    res.status(202).json({ status: 'pending' });
+  } catch (err) {
+    handle(res, next, err);
+  }
+}
+
+// GET .../feature/:number/decomposition → { proposal } (ou null)
+export async function getDecomposition(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const p = paramsOr400(req, res);
+  if (!p) return;
+  try {
+    const rec = await getProposalFor(tenantOf(req).tenantId, p.repoId, p.n);
+    res.json({
+      proposal: rec
+        ? {
+            planSha: rec.planSha,
+            status: rec.status,
+            stories: rec.stories,
+            error: rec.error,
+            updatedAt: rec.updatedAt,
+          }
+        : null,
+    });
+  } catch (err) {
+    handle(res, next, err);
+  }
+}
+
+// PATCH .../feature/:number/decomposition → { stories } (edições do TL)
+export async function patchDecomposition(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const p = paramsOr400(req, res);
+  if (!p) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  if (!Array.isArray(body.stories)) {
+    res.status(400).json({ error: 'stories deve ser uma lista.' });
+    return;
+  }
+  try {
+    await saveProposalStories(
+      tenantOf(req).tenantId,
+      p.repoId,
+      p.n,
+      body.stories as ProposalStory[],
+    );
+    res.status(204).end();
+  } catch (err) {
+    handle(res, next, err);
+  }
+}
+
+// POST .../feature/:number/decomposition/materialize → 202 (inicia/retoma)
+export async function postDecompositionMaterialize(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const p = paramsOr400(req, res);
+  if (!p) return;
+  try {
+    await startMaterialize(tenantOf(req).tenantId, p.repoId, p.n);
+    res.status(202).json({ status: 'materializing' });
   } catch (err) {
     handle(res, next, err);
   }

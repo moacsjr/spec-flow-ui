@@ -339,6 +339,82 @@ export async function rerunPreReview(repoId: string, n: number): Promise<void> {
   await request(`${itemBase(repoId, 'feature', n)}/pre-review/run`, { method: 'POST' });
 }
 
+// ---- Plan view do TL (plan.md + decomposição) ----
+
+export async function fetchPlanMeta(repoId: string, n: number): Promise<SpecMeta> {
+  return (await request(`${specBase(repoId, n)}/plan/meta`, { method: 'GET' })) as SpecMeta;
+}
+
+export async function fetchPlanBlob(repoId: string, n: number, sha: string): Promise<string> {
+  const json = await request(`${specBase(repoId, n)}/plan/blob/${sha}`, { method: 'GET' });
+  return (json as { content: string }).content;
+}
+
+export interface PlanValidation {
+  latestRun: { status: string; conclusion: string | null; url: string; createdAt: string } | null;
+  report: { passed: boolean; issues: { document: 'spec' | 'plan'; message: string }[] } | null;
+}
+
+export async function fetchPlanValidation(repoId: string): Promise<PlanValidation> {
+  return (await request(`/api/repositories/${repoId}/plan-validation`, {
+    method: 'GET',
+  })) as PlanValidation;
+}
+
+export interface ProposalTask {
+  tempId: string;
+  title: string;
+  issueNumber?: number;
+}
+
+export interface ProposalStory {
+  tempId: string;
+  title: string;
+  userStory: string;
+  points: number;
+  origin: 'ai' | 'manual';
+  issueNumber?: number;
+  tasks: ProposalTask[];
+}
+
+export interface DecompositionProposal {
+  planSha: string | null;
+  status: 'pending' | 'draft' | 'invalidated' | 'materializing' | 'done' | 'error';
+  stories: ProposalStory[];
+  error?: string;
+  updatedAt: string;
+}
+
+export async function generateDecomposition(repoId: string, n: number): Promise<void> {
+  await request(`${specBase(repoId, n)}/decomposition/generate`, { method: 'POST' });
+}
+
+export async function fetchDecomposition(
+  repoId: string,
+  n: number,
+): Promise<DecompositionProposal | null> {
+  const json = await request(`${specBase(repoId, n)}/decomposition`, { method: 'GET' });
+  return (json as { proposal: DecompositionProposal | null }).proposal;
+}
+
+export async function saveDecomposition(
+  repoId: string,
+  n: number,
+  stories: ProposalStory[],
+): Promise<void> {
+  await request(`${specBase(repoId, n)}/decomposition`, {
+    method: 'PATCH',
+    payload: { stories },
+  });
+}
+
+export async function materializeDecomposition(repoId: string, n: number): Promise<void> {
+  await request(`${specBase(repoId, n)}/decomposition/materialize`, {
+    method: 'POST',
+    timeoutMs: 30_000,
+  });
+}
+
 // ---- Tela Specification do PM (revisão do spec.md) ----
 
 const specBase = (repoId: string, n: number): string =>

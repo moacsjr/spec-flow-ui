@@ -44,10 +44,14 @@ async function configFor(tenantId: string, repoId: string): Promise<GitHubConfig
   return configForRepository(await getRepositoryOr404(tenantId, repoId));
 }
 
-async function specPathOf(config: GitHubConfig, number: number): Promise<string> {
+async function artifactPathOf(
+  config: GitHubConfig,
+  number: number,
+  kind: 'spec' | 'plan',
+): Promise<string> {
   const ref = await fetchIssueRef(config, number);
-  const { specPath } = await resolveFeaturePaths(config, number, ref.title);
-  return specPath;
+  const { specPath, planPath } = await resolveFeaturePaths(config, number, ref.title);
+  return kind === 'spec' ? specPath : planPath;
 }
 
 // ---- Versões / conteúdo ----
@@ -63,9 +67,10 @@ export async function getSpecMeta(
   tenantId: string,
   repoId: string,
   number: number,
+  kind: 'spec' | 'plan' = 'spec',
 ): Promise<SpecMeta> {
   const config = await configFor(tenantId, repoId);
-  const path = await specPathOf(config, number);
+  const path = await artifactPathOf(config, number, kind);
   const [content, commits] = await Promise.all([
     fetchFileContent(config, path),
     listFileCommits(config, path),
@@ -83,12 +88,13 @@ export async function getSpecBlob(
   repoId: string,
   number: number,
   sha: string,
+  kind: 'spec' | 'plan' = 'spec',
 ): Promise<string> {
   const config = await configFor(tenantId, repoId);
-  const path = await specPathOf(config, number);
+  const path = await artifactPathOf(config, number, kind);
   const content = await fetchFileContentAtRef(config, path, sha);
   if (content === null) {
-    throw new HttpError(404, `spec.md não encontrada na revisão ${sha.slice(0, 7)}.`);
+    throw new HttpError(404, `${kind}.md não encontrado na revisão ${sha.slice(0, 7)}.`);
   }
   return content;
 }
@@ -106,7 +112,7 @@ export async function getSpecStatus(
   number: number,
 ): Promise<SpecStatus> {
   const config = await configFor(tenantId, repoId);
-  const path = await specPathOf(config, number);
+  const path = await artifactPathOf(config, number, 'spec');
   const [content, latestRun] = await Promise.all([
     fetchFileContent(config, path),
     fetchLatestWorkflowRun(config, SPEC_WORKFLOW_FILE).catch(() => null),

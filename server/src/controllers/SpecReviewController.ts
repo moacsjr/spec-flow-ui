@@ -68,6 +68,33 @@ export async function getFeatureSpecBlob(req: Request, res: Response, next: Next
   }
 }
 
+// GET .../feature/:number/plan/meta → { path, content, sha, versions }
+export async function getFeaturePlanMeta(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const p = paramsOr400(req, res);
+  if (!p) return;
+  try {
+    res.json(await getSpecMeta(tenantOf(req).tenantId, p.repoId, p.n, 'plan'));
+  } catch (err) {
+    handle(res, next, err);
+  }
+}
+
+// GET .../feature/:number/plan/blob/:sha → { content }
+export async function getFeaturePlanBlob(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const p = paramsOr400(req, res);
+  if (!p) return;
+  const sha = req.params.sha;
+  if (!/^[0-9a-f]{7,64}$/i.test(sha)) {
+    res.status(400).json({ error: `Revisão inválida: "${sha}".` });
+    return;
+  }
+  try {
+    res.json({ content: await getSpecBlob(tenantOf(req).tenantId, p.repoId, p.n, sha, 'plan') });
+  } catch (err) {
+    handle(res, next, err);
+  }
+}
+
 // GET .../feature/:number/spec/status → { hasSpec, latestRun }
 export async function getFeatureSpecStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
   const p = paramsOr400(req, res);

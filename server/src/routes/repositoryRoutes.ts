@@ -49,7 +49,12 @@ import {
 } from '../controllers/ArtifactController.ts';
 import {
   deleteReviewDraftHandler,
+  getDecomposition,
   getFeaturePlanStatus,
+  getPlanValidationHandler,
+  patchDecomposition,
+  postDecompositionGenerate,
+  postDecompositionMaterialize,
   getPreReviewHandler,
   getReviewCycleHandler,
   getReviewDrafts,
@@ -61,6 +66,8 @@ import {
 import { getRepositorySnapshot } from '../controllers/SnapshotController.ts';
 import { postRepositoryInsight } from '../controllers/InsightsController.ts';
 import {
+  getFeaturePlanBlob,
+  getFeaturePlanMeta,
   getFeatureReviewComments,
   getFeatureSpecBlob,
   getFeatureSpecMeta,
@@ -314,6 +321,42 @@ repositoryRoutes.post(
   '/repositories/:id/workitems/feature/:number/pre-review/run',
   (req, res, next) => {
     postPreReviewRun(req, res, next).catch(next);
+  },
+);
+
+// Plan view do TL: meta/blob do plan.md, validação (validate.yml) e decomposição
+// em duas fases (proposta LLM + materialização idempotente via API).
+repositoryRoutes.get('/repositories/:id/workitems/feature/:number/plan/meta', (req, res, next) => {
+  getFeaturePlanMeta(req, res, next).catch(next);
+});
+repositoryRoutes.get(
+  '/repositories/:id/workitems/feature/:number/plan/blob/:sha',
+  (req, res, next) => {
+    getFeaturePlanBlob(req, res, next).catch(next);
+  },
+);
+repositoryRoutes.get('/repositories/:id/plan-validation', (req, res, next) => {
+  getPlanValidationHandler(req, res, next).catch(next);
+});
+repositoryRoutes.post(
+  '/repositories/:id/workitems/feature/:number/decomposition/generate',
+  (req, res, next) => {
+    postDecompositionGenerate(req, res, next).catch(next);
+  },
+);
+repositoryRoutes.get('/repositories/:id/workitems/feature/:number/decomposition', (req, res, next) => {
+  getDecomposition(req, res, next).catch(next);
+});
+repositoryRoutes.patch(
+  '/repositories/:id/workitems/feature/:number/decomposition',
+  (req, res, next) => {
+    patchDecomposition(req, res, next).catch(next);
+  },
+);
+repositoryRoutes.post(
+  '/repositories/:id/workitems/feature/:number/decomposition/materialize',
+  (req, res, next) => {
+    postDecompositionMaterialize(req, res, next).catch(next);
   },
 );
 

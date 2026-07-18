@@ -447,6 +447,66 @@ export async function updateRefineJob(
   );
 }
 
+// ---------- Proposta de decomposição (Plan view do TL) ----------
+// Fase 1: job LLM produz a proposta editável; fase 2: materialização sequencial
+// idempotente via API (progresso persistido por item — issueNumber preenchido).
+
+export interface ProposalTask {
+  tempId: string;
+  title: string;
+  issueNumber?: number;
+}
+
+export interface ProposalStory {
+  tempId: string;
+  title: string;
+  userStory: string;
+  points: number;
+  origin: 'ai' | 'manual';
+  issueNumber?: number;
+  nodeId?: string; // node do GitHub (link das Tasks como sub-issues)
+  tasks: ProposalTask[];
+}
+
+export type ProposalStatus =
+  | 'pending'
+  | 'draft'
+  | 'invalidated'
+  | 'materializing'
+  | 'done'
+  | 'error';
+
+export interface DecompositionProposalRecord {
+  tenantId: string;
+  repoId: string;
+  issueNumber: number;
+  planSha: string | null;
+  status: ProposalStatus;
+  stories: ProposalStory[];
+  error?: string;
+  updatedAt: string; // ISO
+}
+
+const proposalKey = (t: { tenantId: string; repoId: string; issueNumber: number }) => ({
+  PK: `TENANT#${t.tenantId}`,
+  SK: `DECOMP#${t.repoId}#${t.issueNumber}`,
+});
+
+export async function putProposal(rec: DecompositionProposalRecord): Promise<void> {
+  await doc().send(new PutCommand({ TableName: TABLE, Item: { ...proposalKey(rec), ...rec } }));
+}
+
+export async function getProposal(
+  tenantId: string,
+  repoId: string,
+  issueNumber: number,
+): Promise<DecompositionProposalRecord | null> {
+  const res = await doc().send(
+    new GetCommand({ TableName: TABLE, Key: proposalKey({ tenantId, repoId, issueNumber }) }),
+  );
+  return (res.Item as DecompositionProposalRecord | undefined) ?? null;
+}
+
 // ---------- Revisão técnica do TL (rascunhos, ciclos e pré-review) ----------
 // Rascunhos de comentários (staged): NADA é postado na issue até a devolução.
 
