@@ -63,6 +63,13 @@ import {
   postReturnToPm,
   postReviewDraft,
 } from '../controllers/TechReviewController.ts';
+import {
+  patchWorkItemPoints,
+  postProgressSummary,
+  postQaApprove,
+  postQaReturn,
+  postReturnToReady,
+} from '../controllers/ExecutionController.ts';
 import { getRepositorySnapshot } from '../controllers/SnapshotController.ts';
 import { postRepositoryInsight } from '../controllers/InsightsController.ts';
 import {
@@ -168,6 +175,30 @@ repositoryRoutes.post('/repositories/:id/workitems/:level/:number/prioritize', (
 repositoryRoutes.patch('/repositories/:id/workitems/:level/:number/rank', (req, res, next) => {
   patchWorkItemRank(req, res, next).catch(next);
 });
+
+// Telas de execução do TL: pontos inline, devolução p/ Ready, vereditos de QA
+// e resumo de progresso por milestone.
+repositoryRoutes.patch('/repositories/:id/workitems/:level/:number/points', (req, res, next) => {
+  patchWorkItemPoints(req, res, next).catch(next);
+});
+repositoryRoutes.post(
+  '/repositories/:id/workitems/:level/:number/return-to-ready',
+  (req, res, next) => {
+    postReturnToReady(req, res, next).catch(next);
+  },
+);
+repositoryRoutes.post('/repositories/:id/workitems/:level/:number/qa-approve', (req, res, next) => {
+  postQaApprove(req, res, next).catch(next);
+});
+repositoryRoutes.post('/repositories/:id/workitems/:level/:number/qa-return', (req, res, next) => {
+  postQaReturn(req, res, next).catch(next);
+});
+repositoryRoutes.post(
+  '/repositories/:id/milestones/:milestoneNumber/progress-summary',
+  (req, res, next) => {
+    postProgressSummary(req, res, next).catch(next);
+  },
+);
 repositoryRoutes.get('/repositories/:id/stage-ages', (req, res, next) => {
   getStageAges(req, res, next).catch(next);
 });

@@ -339,6 +339,71 @@ export async function rerunPreReview(repoId: string, n: number): Promise<void> {
   await request(`${itemBase(repoId, 'feature', n)}/pre-review/run`, { method: 'POST' });
 }
 
+// ---- Telas de execução do TL ----
+
+// Story Points inline (Technical Backlog).
+export async function setPoints(
+  repoId: string,
+  level: string,
+  number: number,
+  points: number,
+): Promise<void> {
+  await request(`${itemBase(repoId, level, number)}/points`, {
+    method: 'PATCH',
+    payload: { points },
+    timeoutMs: 30_000,
+  });
+}
+
+// Devolver para Ready (Development): limpa responsável + etapa Ready.
+export async function returnToReady(repoId: string, level: string, number: number): Promise<void> {
+  await request(`${itemBase(repoId, level, number)}/return-to-ready`, {
+    method: 'POST',
+    timeoutMs: 30_000,
+  });
+}
+
+// Approve de QA (Story → Homologação/UAT; Bug → Done).
+export async function qaApprove(
+  repoId: string,
+  level: string,
+  number: number,
+): Promise<{ movedTo: 'UAT' | 'Done' }> {
+  const json = await request(`${itemBase(repoId, level, number)}/qa-approve`, {
+    method: 'POST',
+    timeoutMs: 30_000,
+  });
+  return json as { movedTo: 'UAT' | 'Done' };
+}
+
+// Return to Development de QA (motivo obrigatório; bug opcional — regra D5).
+export async function qaReturn(
+  repoId: string,
+  level: string,
+  number: number,
+  reason: string,
+  createBug: boolean,
+): Promise<{ bugNumber: number | null }> {
+  const json = await request(`${itemBase(repoId, level, number)}/qa-return`, {
+    method: 'POST',
+    payload: { reason, createBug },
+    timeoutMs: 60_000,
+  });
+  return json as { bugNumber: number | null };
+}
+
+// Resumo narrativo de progresso por milestone (Progress).
+export async function fetchProgressSummary(
+  repoId: string,
+  milestoneNumber: number,
+): Promise<string> {
+  const json = await request(
+    `/api/repositories/${repoId}/milestones/${milestoneNumber}/progress-summary`,
+    { method: 'POST', timeoutMs: 60_000 },
+  );
+  return (json as { content: string }).content;
+}
+
 // ---- Plan view do TL (plan.md + decomposição) ----
 
 export async function fetchPlanMeta(repoId: string, n: number): Promise<SpecMeta> {

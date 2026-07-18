@@ -800,6 +800,29 @@ export async function removeLabel(
 
 // Abre/fecha uma issue (REST PATCH state). Usado pelo "Delete" do Backlog
 // (RFC-003): apagar = fechar a issue (GitHub não deleta issues via API).
+// Substitui os assignees de uma issue (REST PATCH; [] limpa). Usado no
+// "Devolver para Ready" da view Development do TL.
+export async function setIssueAssignees(
+  config: GitHubConfig,
+  number: number,
+  assignees: string[],
+): Promise<void> {
+  const url = `https://api.github.com/repos/${config.owner}/${config.repo}/issues/${number}`;
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `bearer ${config.token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ assignees }),
+  });
+  if (res.status === 404) {
+    throw new NotFoundError(`Issue #${number} não encontrada em ${config.owner}/${config.repo}.`);
+  }
+  if (!res.ok) throw new UpstreamError(`GitHub Issues API ${res.status}: ${await res.text()}`);
+}
+
 export async function updateIssueState(
   config: GitHubConfig,
   number: number,
