@@ -1,8 +1,8 @@
 // Code Review do Developer (RFC-003 §4): variante por milestone da fila de
-// code review — PR, reviewer e tempo de espera.
+// code review — PRs vinculados com estado e tempo de espera (QueueList).
 
 import type { WorkspacePageProps } from '../types';
-import { CodeReviewQueue } from '../tech/CodeReviewPage';
+import { QueueList } from '../QueueList';
 import { inMilestone, isOpen, isStory, waitingReview } from '../../../lib/workspaceSelectors';
 
 export function DevCodeReviewPage({ repoId, snapshot, milestoneNumber }: WorkspacePageProps) {
@@ -12,7 +12,12 @@ export function DevCodeReviewPage({ repoId, snapshot, milestoneNumber }: Workspa
   );
   return (
     <div className="ws-page">
-      <CodeReviewQueue repoId={repoId} items={waiting} />
+      <QueueList
+        repoId={repoId}
+        items={waiting}
+        empty="Nenhum PR esperando review."
+        showPrs
+      />
     </div>
   );
 }
