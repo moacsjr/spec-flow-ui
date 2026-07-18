@@ -20,6 +20,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SnapshotItem } from '@spec-flow/shared';
 import type { WorkspacePageProps } from '../types';
+import { ToastStack, useToasts } from '../Toasts';
 import { Mdx } from '../../Mdx';
 import { hrefForItem, hrefForWorkspace } from '../../../lib/router';
 import { isFeature, isOpen, waitingSince } from '../../../lib/workspaceSelectors';
@@ -105,42 +106,6 @@ function hasAcceptanceCriteria(content: string): boolean {
 
 function h2Sections(content: string): string[] {
   return [...content.matchAll(/^##\s+(.+)$/gm)].map((m) => m[1].trim());
-}
-
-// ---------- toasts ----------
-
-interface ToastItem {
-  id: number;
-  message: string;
-  action?: { label: string; run: () => void };
-}
-
-function ToastStack({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: number) => void }) {
-  if (toasts.length === 0) return null;
-  return (
-    <div className="bl-toasts" role="status">
-      {toasts.map((t) => (
-        <div key={t.id} className="bl-toast">
-          <span className="bl-toast__msg">{t.message}</span>
-          {t.action && (
-            <button
-              type="button"
-              className="btn btn--sm btn--accent"
-              onClick={() => {
-                onDismiss(t.id);
-                t.action?.run();
-              }}
-            >
-              {t.action.label}
-            </button>
-          )}
-          <button type="button" className="bl-toast__close" onClick={() => onDismiss(t.id)} aria-label="Fechar aviso">
-            ✕
-          </button>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 // ---------- diff panel ----------
@@ -408,16 +373,9 @@ export function SpecificationPage({
   const [removedLocal, setRemovedLocal] = useState<Set<number>>(new Set());
   const [milestonePick, setMilestonePick] = useState<Record<number, string>>({});
   const [pulse, setPulse] = useState<Set<number>>(new Set());
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const toastSeq = useRef(0);
+  const { toasts, addToast, dismissToast } = useToasts();
   const docRef = useRef<HTMLDivElement>(null);
   const blobCache = useRef<Map<string, string>>(new Map());
-
-  const addToast = (message: string, action?: ToastItem['action']) => {
-    const id = ++toastSeq.current;
-    setToasts((ts) => [...ts, { id, message, action }]);
-    window.setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), action ? 10_000 : 6_000);
-  };
 
   // ---- fila ----
   const queue = useMemo(() => {
@@ -1098,7 +1056,7 @@ export function SpecificationPage({
         </div>
       )}
 
-      <ToastStack toasts={toasts} onDismiss={(id) => setToasts((ts) => ts.filter((t) => t.id !== id))} />
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

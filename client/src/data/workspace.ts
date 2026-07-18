@@ -147,6 +147,35 @@ export async function bulkArchive(repoId: string, numbers: number[]): Promise<Bu
   return (json as { results: BulkResult[] }).results;
 }
 
+// Rank (drag de reordenação da Prioritization): grava o campo numérico do board.
+export async function setRank(
+  repoId: string,
+  level: string,
+  number: number,
+  rank: number,
+): Promise<void> {
+  await request(`${itemBase(repoId, level, number)}/rank`, {
+    method: 'PATCH',
+    payload: { rank },
+    timeoutMs: 30_000,
+  });
+}
+
+// Idades por etapa (tempo-na-etapa; approximate = entrada estimada na reconciliação).
+export interface StageAge {
+  number: number;
+  at: string; // ISO
+  approximate: boolean;
+}
+
+export async function fetchStageAges(repoId: string, stage: StageName): Promise<StageAge[]> {
+  const json = await request(
+    `/api/repositories/${repoId}/stage-ages?stage=${encodeURIComponent(stage)}`,
+    { method: 'GET' },
+  );
+  return (json as { ages: StageAge[] }).ages;
+}
+
 // ---- Tela Specification do PM (revisão do spec.md) ----
 
 const specBase = (repoId: string, n: number): string =>

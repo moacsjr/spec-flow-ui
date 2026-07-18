@@ -45,6 +45,7 @@ import { HttpError } from '../lib/errors.ts';
 import { normalizeStage } from '../lib/status.ts';
 import { invalidateSnapshot } from '../lib/snapshotCache.ts';
 import { loadSnapshotForRepository } from './snapshotService.ts';
+import { putStageEntry, queryStageEntries } from '../db/dynamo.ts';
 import {
   adaptEpic,
   adaptFeature,
@@ -534,6 +535,29 @@ export async function prioritizeWorkItemForRepository(
   invalidateSnapshot(tenantId, id);
 }
 
+// Grava o Rank (campo numérico do board) de um item — drag de reordenação da
+// Prioritization. Garante o campo na primeira gravação.
+export async function setRankForRepository(
+  tenantId: string,
+  id: string,
+  number: number,
+  rank: number,
+): Promise<void> {
+  const config = await configForRepository(await getRepositoryOr404(tenantId, id));
+  if (!config.project) {
+    throw new HttpError(409, 'Este repositório não tem um Projects v2 vinculado.');
+  }
+  const itemId = await fetchProjectItemId(config, number, config.project.projectId);
+  if (!itemId) {
+    throw new HttpError(422, `A issue #${number} não está no board deste repositório.`);
+  }
+  const field =
+    (await fetchNumberField(config, config.project.projectId, RANK_FIELD)) ??
+    (await createNumberField(config, config.project.projectId, RANK_FIELD));
+  await setProjectItemNumberValue(config, config.project.projectId, itemId, field.id, rank);
+  invalidateSnapshot(tenantId, id);
+}
+
 // Resultado por item das operações em lote do Backlog.
 export interface BulkResult {
   number: number;
@@ -716,7 +740,59 @@ export async function setStageForRepository(
   }
 
   await moveProjectStage(config, project.projectId, itemId, project.etapaFieldId, option[1]);
+
+  // Registra a ENTRADA na etapa (tempo-na-etapa das telas do PM). Best-effort.
+  try {
+    await putStageEntry({
+      tenantId,
+      repoId: id,
+      stage,
+      issueNumber: number,
+      at: new Date().toISOString(),
+      approximate: false,
+    });
+  } catch (err) {
+    logger.warn(`Issue #${number}: etapa movida, mas falhou o registro de transição: ${(err as Error).message}`);
+  }
+
   invalidateSnapshot(tenantId, id);
+}
+
+// Idades na etapa (GET stage-ages): entrada registrada por item na etapa pedida,
+// reconciliando itens movidos por fora da UI — sem registro, recebem `at = agora`
+// com marcador approximate (a UI mostra "~{n}d").
+export async function stageAgesForRepository(
+  tenantId: string,
+  id: string,
+  stage: StageName,
+): Promise<{ number: number; at: string; approximate: boolean }[]> {
+  const [entries, snapshot] = await Promise.all([
+    queryStageEntries(tenantId, id, stage),
+    loadSnapshotForRepository(tenantId, id),
+  ]);
+  const byNumber = new Map(entries.map((e) => [e.issueNumber, e]));
+  const now = new Date().toISOString();
+  const out: { number: number; at: string; approximate: boolean }[] = [];
+
+  for (const item of snapshot.items) {
+    if (item.stage !== stage || item.state !== 'open') continue;
+    const entry = byNumber.get(item.number);
+    if (entry) {
+      out.push({ number: item.number, at: entry.at, approximate: entry.approximate });
+    } else {
+      // Reconciliação: item chegou à etapa por fora do backend.
+      out.push({ number: item.number, at: now, approximate: true });
+      putStageEntry({
+        tenantId,
+        repoId: id,
+        stage,
+        issueNumber: item.number,
+        at: now,
+        approximate: true,
+      }).catch(() => undefined);
+    }
+  }
+  return out;
 }
 
 // Lista os épicos (issues [EPIC]) de um repositório do tenant.

@@ -24,7 +24,7 @@ import { generateArtifact } from '../llm/openrouter.ts';
 import { logger } from '../lib/logger.ts';
 import { emitMetric } from '../lib/metrics.ts';
 import { invalidateSnapshot } from '../lib/snapshotCache.ts';
-import { getRefineJob, putRefineJob, updateRefineJob } from '../db/dynamo.ts';
+import { getRefineJob, putRefineJob, putStageEntry, updateRefineJob } from '../db/dynamo.ts';
 import { invokeAsync } from '../lib/lambdaInvoke.ts';
 import { consumeRefineOrThrow } from './quotaService.ts';
 import { tenantOpenrouterKey } from './settingsService.ts';
@@ -95,6 +95,15 @@ export async function createArtifact(
   const config = await configForRepository(await getRepositoryOr404(tenantId, id));
   await addLabel(config, number, LABEL[kind]);
   await moveStage(config, number, kind);
+  // Registra a entrada na etapa (tempo-na-etapa das telas do PM). Best-effort.
+  putStageEntry({
+    tenantId,
+    repoId: id,
+    stage: kind === 'spec' ? 'Spec' : 'Plan',
+    issueNumber: number,
+    at: new Date().toISOString(),
+    approximate: false,
+  }).catch(() => undefined);
   invalidateSnapshot(tenantId, id); // label + etapa mudaram → workspaces releem
   return loadWorkItem(config, 'feature', number);
 }

@@ -2398,3 +2398,126 @@
 .sp-diff__line--add { background: rgba(123, 191, 158, 0.13); color: var(--done); }
 .sp-diff__line--del { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
 .sp-diff__sign { display: inline-block; width: 16px; color: var(--text-faint); }
+
+/* ==================================================================
+   Prioritization (PM) — grupos P0→P3, drag de rank, WIP persuasivo.
+   ================================================================== */
+
+/* Chip da fila de revisão (WIP persuasivo). */
+.pr-wip {
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--well);
+  color: var(--text-3);
+  cursor: pointer;
+}
+.pr-wip:hover { border-color: var(--border-hover); color: var(--text-2); }
+.pr-wip--warning {
+  border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  color: var(--warning);
+}
+.pr-wip--danger {
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+.pr-insights--danger {
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+.pr-insights__link {
+  border: none;
+  background: none;
+  color: var(--accent-light);
+  cursor: pointer;
+  font-size: 13px;
+  text-decoration: underline;
+  padding: 0;
+}
+.pr-insights__actions { display: inline-flex; gap: 8px; margin-left: 10px; }
+
+/* Grupos */
+.pr-group { display: flex; flex-direction: column; gap: 8px; }
+.pr-group__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 8px;
+}
+.pr-group__head:hover { background: var(--surface); }
+.pr-group__chevron { color: var(--text-muted); font-size: 11px; width: 14px; }
+.pr-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-2);
+  background: var(--well);
+}
+.pr-badge--p0 { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.pr-badge--p1 { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 45%, transparent); background: color-mix(in srgb, var(--warning) 10%, transparent); }
+.pr-group__count { font-size: 12.5px; color: var(--text-muted); }
+
+/* Linhas */
+.pr-rows { display: flex; flex-direction: column; gap: 6px; }
+.pr-row {
+  display: grid;
+  grid-template-columns: 24px 28px minmax(0, 1fr) 70px 76px 76px 150px;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  transition: opacity 0.2s ease;
+}
+.pr-row:hover { border-color: var(--border-hover); }
+.pr-row--leaving { opacity: 0; pointer-events: none; }
+.pr-row--dragging { opacity: 0.45; }
+.pr-row--insert-before { box-shadow: inset 0 2px 0 0 var(--accent); }
+.pr-row--insert-after { box-shadow: inset 0 -2px 0 0 var(--accent); }
+.pr-row--picked { background: var(--accent-soft); }
+
+/* Checkbox revelado no hover (ou quando marcado). */
+.pr-row__check { opacity: 0; transition: opacity 0.12s; }
+.pr-row:hover .pr-row__check,
+.pr-row__check:checked,
+.pr-row--picked .pr-row__check { opacity: 1; }
+
+.pr-row__grip {
+  color: var(--text-ghost);
+  font-size: 13px;
+  cursor: grab;
+  user-select: none;
+  text-align: center;
+}
+.pr-row__grip:active { cursor: grabbing; }
+.pr-row__title {
+  min-width: 0;
+  border: none;
+  background: none;
+  padding: 0;
+  text-align: left;
+  font-size: 14px;
+  color: var(--text-2);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pr-row__title:hover { color: var(--accent-light); }
+.pr-row__title .mono { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-muted); }
+.pr-row__area { font-size: 13px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pr-row__age { font-size: 12.5px; color: var(--text-3); white-space: nowrap; }
+.pr-row__age--warn { color: var(--warning); }
+.pr-row__send { white-space: nowrap; justify-content: center; }

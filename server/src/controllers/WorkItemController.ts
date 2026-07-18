@@ -25,8 +25,10 @@ import {
   loadWorkItemForRepository,
   prioritizeWorkItemForRepository,
   setPriorityForRepository,
+  setRankForRepository,
   setStageForRepository,
   setWorkItemParentForRepository,
+  stageAgesForRepository,
   startDevelopmentForRepository,
   updateWorkItemForRepository,
 } from '../services/workItemService.ts';
@@ -350,6 +352,59 @@ export async function bulkReparentWorkItems(
       results: await bulkReparentForRepository(tenantOf(req).tenantId, id, numbers, parentNumber),
     });
   } catch (err) {
+    next(err);
+  }
+}
+
+// PATCH /api/repositories/:id/workitems/:level/:number/rank — { rank: number }.
+// Persistência do drag de reordenação da Prioritization.
+export async function patchWorkItemRank(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const id = repoIdParamOr400(req, res);
+  if (!id) return;
+  const n = Number(req.params.number);
+  if (!Number.isInteger(n) || n <= 0) {
+    res.status(400).json({ error: `Número inválido: "${req.params.number}".` });
+    return;
+  }
+  const rank = Number(((req.body ?? {}) as Record<string, unknown>).rank);
+  if (!Number.isFinite(rank)) {
+    res.status(400).json({ error: 'rank deve ser um número.' });
+    return;
+  }
+
+  try {
+    await setRankForRepository(tenantOf(req).tenantId, id, n, rank);
+    res.status(204).end();
+  } catch (err) {
+    if (err instanceof HttpError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
+// GET /api/repositories/:id/stage-ages?stage=Priorizado → { ages: [{number, at, approximate}] }
+export async function getStageAges(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const id = repoIdParamOr400(req, res);
+  if (!id) return;
+  const stage = req.query.stage;
+  if (typeof stage !== 'string' || !STAGE_NAMES.includes(stage as StageName)) {
+    res.status(400).json({ error: `stage inválida. Use uma de: ${STAGE_NAMES.join(', ')}.` });
+    return;
+  }
+
+  try {
+    res.json({ ages: await stageAgesForRepository(tenantOf(req).tenantId, id, stage as StageName) });
+  } catch (err) {
+    if (err instanceof HttpError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
     next(err);
   }
 }

@@ -10,16 +10,17 @@
 // ações em lote. Clique no título abre a Feature em drawer lateral.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Level, Priority, SnapshotItem, WorkItemView } from '@spec-flow/shared';
+import type { Level, Priority, SnapshotItem } from '@spec-flow/shared';
 import { PRIORITIES } from '@spec-flow/shared';
 import type { WorkspacePageProps } from '../types';
 import { ItemTable, type Column } from '../ItemTable';
 import { AiSummary } from '../AiSummary';
-import { Mdx } from '../../Mdx';
-import { hrefForItem, hrefForWorkspace } from '../../../lib/router';
+import { FeatureDrawer } from '../FeatureDrawer';
+import { ToastStack, useToasts } from '../Toasts';
+import { hrefForWorkspace } from '../../../lib/router';
 import { isOpen } from '../../../lib/workspaceSelectors';
 import { isDescendantOf, itemsByNumber, typeSlug } from '../../../lib/workItemType';
-import { createWorkItem, fetchWorkItem } from '../../../data/workItem';
+import { createWorkItem } from '../../../data/workItem';
 import {
   archiveWorkItem,
   bulkArchive,
@@ -69,47 +70,6 @@ function ageDays(item: SnapshotItem): number {
 // Level válido para rotas de work item (Spike herda 'feature' na inferência).
 function levelOf(item: SnapshotItem): Level {
   return item.level === 'epic' || item.level === 'story' ? item.level : 'feature';
-}
-
-// ---------- Toasts (mínimo local: stack fixa, ação opcional, auto-dismiss) ----------
-
-interface ToastItem {
-  id: number;
-  message: string;
-  action?: { label: string; run: () => void };
-}
-
-function ToastStack({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: number) => void }) {
-  if (toasts.length === 0) return null;
-  return (
-    <div className="bl-toasts" role="status">
-      {toasts.map((t) => (
-        <div key={t.id} className="bl-toast">
-          <span className="bl-toast__msg">{t.message}</span>
-          {t.action && (
-            <button
-              type="button"
-              className="btn btn--sm btn--accent"
-              onClick={() => {
-                onDismiss(t.id);
-                t.action?.run();
-              }}
-            >
-              {t.action.label}
-            </button>
-          )}
-          <button
-            type="button"
-            className="bl-toast__close"
-            onClick={() => onDismiss(t.id)}
-            aria-label="Fechar aviso"
-          >
-            ✕
-          </button>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 // ---------- Checkbox tri-state ----------
@@ -337,92 +297,6 @@ function NovaFeatureForm({
   );
 }
 
-// ---------- Drawer compacto da Feature (interino — Feature View tem spec própria) ----------
-
-function FeatureDrawer({
-  repoId,
-  item,
-  onClose,
-}: {
-  repoId: string;
-  item: SnapshotItem;
-  onClose: () => void;
-}) {
-  const [state, setState] = useState<
-    { phase: 'loading' } | { phase: 'error'; message: string } | { phase: 'ready'; view: WorkItemView }
-  >({ phase: 'loading' });
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setState({ phase: 'loading' });
-    fetchWorkItem(repoId, levelOf(item), item.number, controller.signal)
-      .then((view) => setState({ phase: 'ready', view }))
-      .catch((err: Error) => {
-        if (!controller.signal.aborted) setState({ phase: 'error', message: err.message });
-      });
-    return () => controller.abort();
-  }, [repoId, item]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  const slug = typeSlug(item);
-
-  return (
-    <>
-      <div className="bl-drawer-backdrop" onMouseDown={onClose} />
-      <aside className="bl-drawer" role="dialog" aria-label={`Item #${item.number}`}>
-        <div className="bl-drawer__head">
-          <span className={`proj-badge proj-badge--${slug}`}>
-            {slug === 'spike' ? 'SPIKE' : 'FEAT'}
-          </span>
-          <span className="bl-drawer__title">
-            <span className="mono">#{item.number}</span> {item.title}
-          </span>
-          <button type="button" className="bl-drawer__close" onClick={onClose} aria-label="Fechar">
-            ✕
-          </button>
-        </div>
-
-        <div className="bl-drawer__meta">
-          {item.area && <span className="chip">{item.area}</span>}
-          {(item.stageRaw ?? item.stage) && (
-            <span className="chip chip--stage">{item.stageRaw ?? item.stage}</span>
-          )}
-          {item.priority && (
-            <span className={`chip chip--${item.priority.toLowerCase()}`}>{item.priority}</span>
-          )}
-          <span className="chip">{ageDays(item)}d no backlog</span>
-        </div>
-
-        <div className="bl-drawer__body">
-          {state.phase === 'loading' && (
-            <p className="bl-drawer__loading">
-              <span className="spinner" aria-hidden="true" /> Carregando…
-            </p>
-          )}
-          {state.phase === 'error' && <p className="ai-panel__error">{state.message}</p>}
-          {state.phase === 'ready' &&
-            (state.view.descriptionMdx ? (
-              <Mdx source={state.view.descriptionMdx} />
-            ) : (
-              <p className="bl-drawer__loading">Sem descrição.</p>
-            ))}
-        </div>
-
-        <div className="bl-drawer__foot">
-          <a className="btn" href={hrefForItem(repoId, levelOf(item), item.number)}>
-            Abrir página completa →
-          </a>
-        </div>
-      </aside>
-    </>
-  );
-}
-
 // ---------- Página ----------
 
 export function BacklogPage({ repoId, snapshot, refresh }: WorkspacePageProps) {
@@ -444,18 +318,7 @@ export function BacklogPage({ repoId, snapshot, refresh }: WorkspacePageProps) {
   const [archiving, setArchiving] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
   const [drawerItem, setDrawerItem] = useState<SnapshotItem | null>(null);
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const toastSeq = useRef(0);
-
-  const addToast = (message: string, action?: ToastItem['action']) => {
-    const id = ++toastSeq.current;
-    setToasts((ts) => [...ts, { id, message, action }]);
-    window.setTimeout(
-      () => setToasts((ts) => ts.filter((t) => t.id !== id)),
-      action ? 10_000 : 6_000,
-    );
-  };
-  const dismissToast = (id: number) => setToasts((ts) => ts.filter((t) => t.id !== id));
+  const { toasts, addToast, dismissToast } = useToasts();
 
   const byNumber = useMemo(() => itemsByNumber(working), [working]);
 

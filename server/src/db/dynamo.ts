@@ -447,6 +447,54 @@ export async function updateRefineJob(
   );
 }
 
+// ---------- Transições de etapa (tempo na etapa — Prioritization etc.) ----------
+// Um registro por item+etapa com o momento da ENTRADA (reentrada sobrescreve).
+// Gravado por toda mutação de etapa que passa pelo backend; itens movidos por
+// fora da UI recebem um registro aproximado na reconciliação (approximate).
+
+export interface StageEntryRecord {
+  tenantId: string;
+  repoId: string;
+  stage: string; // StageName canônico
+  issueNumber: number;
+  at: string; // ISO — momento da entrada na etapa
+  approximate: boolean;
+}
+
+const stageEntryKey = (t: {
+  tenantId: string;
+  repoId: string;
+  stage: string;
+  issueNumber: number;
+}) => ({
+  PK: `TENANT#${t.tenantId}`,
+  SK: `STAGEAT#${t.repoId}#${t.stage}#${t.issueNumber}`,
+});
+
+export async function putStageEntry(rec: StageEntryRecord): Promise<void> {
+  await doc().send(
+    new PutCommand({ TableName: TABLE, Item: { ...stageEntryKey(rec), ...rec } }),
+  );
+}
+
+export async function queryStageEntries(
+  tenantId: string,
+  repoId: string,
+  stage: string,
+): Promise<StageEntryRecord[]> {
+  const res = await doc().send(
+    new QueryCommand({
+      TableName: TABLE,
+      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+      ExpressionAttributeValues: {
+        ':pk': `TENANT#${tenantId}`,
+        ':sk': `STAGEAT#${repoId}#${stage}#`,
+      },
+    }),
+  );
+  return (res.Items ?? []) as StageEntryRecord[];
+}
+
 // ---------- Triagem de comentários de revisão de spec (tela Specification) ----------
 // Estado da triagem (aceito/descartado/aplicado) por comentário do GitHub. A
 // issue NÃO é alterada pela triagem — só por réplicas explícitas.

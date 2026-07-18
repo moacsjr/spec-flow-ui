@@ -17,6 +17,8 @@ import {
   createRepositoryFeature,
   createRepositoryWorkItem,
   deleteRepositoryWorkItem,
+  getStageAges,
+  patchWorkItemRank,
   prioritizeRepositoryWorkItem,
   getRepositoryWorkItem,
   reorderWorkItems,
@@ -139,6 +141,14 @@ repositoryRoutes.post('/repositories/:id/workitems/bulk/archive', (req, res, nex
 });
 repositoryRoutes.post('/repositories/:id/workitems/:level/:number/prioritize', (req, res, next) => {
   prioritizeRepositoryWorkItem(req, res, next).catch(next);
+});
+
+// Rank (drag da Prioritization) e idades por etapa (tempo-na-etapa).
+repositoryRoutes.patch('/repositories/:id/workitems/:level/:number/rank', (req, res, next) => {
+  patchWorkItemRank(req, res, next).catch(next);
+});
+repositoryRoutes.get('/repositories/:id/stage-ages', (req, res, next) => {
+  getStageAges(req, res, next).catch(next);
 });
 
 // PATCH /api/repositories/:id/workitems/:level/:number → edita título/corpo da issue.
