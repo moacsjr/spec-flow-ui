@@ -947,7 +947,7 @@ export async function createComment(
   config: GitHubConfig,
   number: number,
   body: string,
-): Promise<void> {
+): Promise<number> {
   const url = `https://api.github.com/repos/${config.owner}/${config.repo}/issues/${number}/comments`;
   const res = await fetch(url, {
     method: 'POST',
@@ -962,6 +962,8 @@ export async function createComment(
     throw new NotFoundError(`Issue #${number} não encontrada em ${config.owner}/${config.repo}.`);
   }
   if (!res.ok) throw new UpstreamError(`GitHub Issues API ${res.status}: ${await res.text()}`);
+  const json = (await res.json()) as { id?: number };
+  return json.id ?? 0;
 }
 
 // Lê o SHA atual de um arquivo (Contents API, metadados JSON). Necessário para

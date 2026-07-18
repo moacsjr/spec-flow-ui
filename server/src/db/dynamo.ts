@@ -447,6 +447,134 @@ export async function updateRefineJob(
   );
 }
 
+// ---------- Revisão técnica do TL (rascunhos, ciclos e pré-review) ----------
+// Rascunhos de comentários (staged): NADA é postado na issue até a devolução.
+
+export interface ReviewDraftRecord {
+  tenantId: string;
+  repoId: string;
+  issueNumber: number;
+  draftId: string;
+  body: string;
+  anchor: unknown | null; // formato da âncora da Specification (§4.2)
+  specSha: string | null;
+  createdAt: string; // ISO
+}
+
+const reviewDraftKey = (t: { tenantId: string; repoId: string; issueNumber: number; draftId: string }) => ({
+  PK: `TENANT#${t.tenantId}`,
+  SK: `REVDRAFT#${t.repoId}#${t.issueNumber}#${t.draftId}`,
+});
+
+export async function putReviewDraft(rec: ReviewDraftRecord): Promise<void> {
+  await doc().send(
+    new PutCommand({ TableName: TABLE, Item: { ...reviewDraftKey(rec), ...rec } }),
+  );
+}
+
+export async function deleteReviewDraft(
+  tenantId: string,
+  repoId: string,
+  issueNumber: number,
+  draftId: string,
+): Promise<void> {
+  await doc().send(
+    new DeleteCommand({
+      TableName: TABLE,
+      Key: reviewDraftKey({ tenantId, repoId, issueNumber, draftId }),
+    }),
+  );
+}
+
+export async function queryReviewDrafts(
+  tenantId: string,
+  repoId: string,
+  issueNumber: number,
+): Promise<ReviewDraftRecord[]> {
+  const res = await doc().send(
+    new QueryCommand({
+      TableName: TABLE,
+      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+      ExpressionAttributeValues: {
+        ':pk': `TENANT#${tenantId}`,
+        ':sk': `REVDRAFT#${repoId}#${issueNumber}#`,
+      },
+    }),
+  );
+  return (res.Items ?? []) as ReviewDraftRecord[];
+}
+
+// Ciclo de revisão: registrado na devolução ao PM (specSha revisado + comentários).
+export interface ReviewCycleRecord {
+  tenantId: string;
+  repoId: string;
+  issueNumber: number;
+  specSha: string | null;
+  returnedAt: string; // ISO
+  commentIds: number[]; // comentários publicados na issue neste ciclo
+}
+
+// Um ciclo por item (o último vence — a re-revisão olha o ciclo mais recente).
+const reviewCycleKey = (t: { tenantId: string; repoId: string; issueNumber: number }) => ({
+  PK: `TENANT#${t.tenantId}`,
+  SK: `REVCYCLE#${t.repoId}#${t.issueNumber}`,
+});
+
+export async function putReviewCycle(rec: ReviewCycleRecord): Promise<void> {
+  await doc().send(
+    new PutCommand({ TableName: TABLE, Item: { ...reviewCycleKey(rec), ...rec } }),
+  );
+}
+
+export async function getReviewCycle(
+  tenantId: string,
+  repoId: string,
+  issueNumber: number,
+): Promise<ReviewCycleRecord | null> {
+  const res = await doc().send(
+    new GetCommand({ TableName: TABLE, Key: reviewCycleKey({ tenantId, repoId, issueNumber }) }),
+  );
+  return (res.Item as ReviewCycleRecord | undefined) ?? null;
+}
+
+// Pré-review por IA: achados por item (uma execução automática; manual substitui).
+export interface PreReviewFinding {
+  text: string;
+  anchor: unknown | null;
+  severity: 'info' | 'warning';
+}
+
+export interface PreReviewRecord {
+  tenantId: string;
+  repoId: string;
+  issueNumber: number;
+  status: 'pending' | 'done' | 'error';
+  specSha: string | null;
+  findings: PreReviewFinding[];
+  error?: string;
+  updatedAt: string; // ISO
+}
+
+const preReviewKey = (t: { tenantId: string; repoId: string; issueNumber: number }) => ({
+  PK: `TENANT#${t.tenantId}`,
+  SK: `PREREVIEW#${t.repoId}#${t.issueNumber}`,
+});
+
+export async function putPreReview(rec: PreReviewRecord): Promise<void> {
+  await doc().send(new PutCommand({ TableName: TABLE, Item: { ...preReviewKey(rec), ...rec } }));
+}
+
+export async function getPreReview(
+  tenantId: string,
+  repoId: string,
+  issueNumber: number,
+): Promise<PreReviewRecord | null> {
+  const res = await doc().send(
+    new GetCommand({ TableName: TABLE, Key: preReviewKey({ tenantId, repoId, issueNumber }) }),
+  );
+  return (res.Item as PreReviewRecord | undefined) ?? null;
+}
+
 // ---------- Metadados da estimativa por IA (tela Planning) ----------
 // O VALOR fica no campo numérico "Estimate" do Projects v2 (sem lock-in); aqui
 // vive só a origem (ai|manual), a versão da spec usada e o marcador de spec

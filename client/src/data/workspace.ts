@@ -223,6 +223,122 @@ export async function fetchEstimatesMeta(repoId: string): Promise<EstimateMeta[]
   return (json as { estimates: EstimateMeta[] }).estimates;
 }
 
+// ---- Revisão técnica do TL (Backlog view do Tech Leader) ----
+
+export interface ReviewDraft {
+  draftId: string;
+  body: string;
+  anchor: { selectedText?: string } | null;
+  specSha: string | null;
+  createdAt: string;
+}
+
+export async function fetchReviewDrafts(repoId: string, n: number): Promise<ReviewDraft[]> {
+  const json = await request(`${itemBase(repoId, 'feature', n)}/review-drafts`, { method: 'GET' });
+  return (json as { drafts: ReviewDraft[] }).drafts;
+}
+
+export async function createReviewDraft(
+  repoId: string,
+  n: number,
+  input: { body: string; anchor?: unknown; specSha?: string | null },
+): Promise<void> {
+  await request(`${itemBase(repoId, 'feature', n)}/review-drafts`, {
+    method: 'POST',
+    payload: input,
+  });
+}
+
+export async function updateReviewDraft(
+  repoId: string,
+  n: number,
+  draftId: string,
+  body: string,
+): Promise<void> {
+  await request(`${itemBase(repoId, 'feature', n)}/review-drafts/${draftId}`, {
+    method: 'PATCH',
+    payload: { body },
+  });
+}
+
+export async function deleteReviewDraft(
+  repoId: string,
+  n: number,
+  draftId: string,
+): Promise<void> {
+  await request(`${itemBase(repoId, 'feature', n)}/review-drafts/${draftId}`, {
+    method: 'DELETE',
+  });
+}
+
+export interface ReturnToPmResult {
+  ok: boolean;
+  step: 'comments' | 'label' | 'stage' | 'cycle' | 'done';
+  posted: number;
+  total: number;
+  error?: string;
+}
+
+export async function returnFeatureToPm(repoId: string, n: number): Promise<ReturnToPmResult> {
+  const json = await request(`${itemBase(repoId, 'feature', n)}/return-to-pm`, {
+    method: 'POST',
+    timeoutMs: 60_000,
+  });
+  return json as ReturnToPmResult;
+}
+
+export interface ReviewCycleView {
+  specSha: string | null;
+  returnedAt: string;
+  comments: {
+    id: number;
+    author: string;
+    createdAt: string;
+    body: string;
+    state: 'pending' | 'accepted' | 'dismissed' | 'applied';
+    instruction: string | null;
+  }[];
+}
+
+export async function fetchReviewCycle(repoId: string, n: number): Promise<ReviewCycleView | null> {
+  const json = await request(`${itemBase(repoId, 'feature', n)}/review-cycle`, { method: 'GET' });
+  return (json as { cycle: ReviewCycleView | null }).cycle;
+}
+
+export interface PlanStatus {
+  hasPlan: boolean;
+  latestRun: { status: string; conclusion: string | null; url: string; createdAt: string } | null;
+}
+
+export async function fetchPlanStatus(repoId: string, n: number): Promise<PlanStatus> {
+  return (await request(`${itemBase(repoId, 'feature', n)}/plan/status`, {
+    method: 'GET',
+  })) as PlanStatus;
+}
+
+export interface PreReviewFinding {
+  text: string;
+  anchor: { selectedText?: string } | null;
+  severity: 'info' | 'warning';
+}
+
+export interface PreReviewState {
+  status: 'pending' | 'done' | 'error';
+  specSha: string | null;
+  findings: PreReviewFinding[];
+  error?: string;
+}
+
+export async function fetchPreReview(repoId: string, n: number): Promise<PreReviewState> {
+  return (await request(`${itemBase(repoId, 'feature', n)}/pre-review`, {
+    method: 'GET',
+  })) as PreReviewState;
+}
+
+export async function rerunPreReview(repoId: string, n: number): Promise<void> {
+  await request(`${itemBase(repoId, 'feature', n)}/pre-review/run`, { method: 'POST' });
+}
+
 // ---- Tela Specification do PM (revisão do spec.md) ----
 
 const specBase = (repoId: string, n: number): string =>

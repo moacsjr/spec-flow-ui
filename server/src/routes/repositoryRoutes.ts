@@ -47,6 +47,17 @@ import {
   refineFeatureArtifact,
   saveFeatureArtifact,
 } from '../controllers/ArtifactController.ts';
+import {
+  deleteReviewDraftHandler,
+  getFeaturePlanStatus,
+  getPreReviewHandler,
+  getReviewCycleHandler,
+  getReviewDrafts,
+  patchReviewDraft,
+  postPreReviewRun,
+  postReturnToPm,
+  postReviewDraft,
+} from '../controllers/TechReviewController.ts';
 import { getRepositorySnapshot } from '../controllers/SnapshotController.ts';
 import { postRepositoryInsight } from '../controllers/InsightsController.ts';
 import {
@@ -264,6 +275,45 @@ repositoryRoutes.post(
   '/repositories/:id/workitems/feature/:number/return-to-prioritization',
   (req, res, next) => {
     postReturnToPrioritization(req, res, next).catch(next);
+  },
+);
+
+// Revisão técnica do TL (Backlog view do Tech Leader): rascunhos staged,
+// devolução ao PM, ciclo de re-revisão, status do plan e pré-review por IA.
+repositoryRoutes.get('/repositories/:id/workitems/feature/:number/review-drafts', (req, res, next) => {
+  getReviewDrafts(req, res, next).catch(next);
+});
+repositoryRoutes.post('/repositories/:id/workitems/feature/:number/review-drafts', (req, res, next) => {
+  postReviewDraft(req, res, next).catch(next);
+});
+repositoryRoutes.patch(
+  '/repositories/:id/workitems/feature/:number/review-drafts/:draftId',
+  (req, res, next) => {
+    patchReviewDraft(req, res, next).catch(next);
+  },
+);
+repositoryRoutes.delete(
+  '/repositories/:id/workitems/feature/:number/review-drafts/:draftId',
+  (req, res, next) => {
+    deleteReviewDraftHandler(req, res, next).catch(next);
+  },
+);
+repositoryRoutes.post('/repositories/:id/workitems/feature/:number/return-to-pm', (req, res, next) => {
+  postReturnToPm(req, res, next).catch(next);
+});
+repositoryRoutes.get('/repositories/:id/workitems/feature/:number/review-cycle', (req, res, next) => {
+  getReviewCycleHandler(req, res, next).catch(next);
+});
+repositoryRoutes.get('/repositories/:id/workitems/feature/:number/plan/status', (req, res, next) => {
+  getFeaturePlanStatus(req, res, next).catch(next);
+});
+repositoryRoutes.get('/repositories/:id/workitems/feature/:number/pre-review', (req, res, next) => {
+  getPreReviewHandler(req, res, next).catch(next);
+});
+repositoryRoutes.post(
+  '/repositories/:id/workitems/feature/:number/pre-review/run',
+  (req, res, next) => {
+    postPreReviewRun(req, res, next).catch(next);
   },
 );
 
