@@ -147,6 +147,98 @@ export async function bulkArchive(repoId: string, numbers: number[]): Promise<Bu
   return (json as { results: BulkResult[] }).results;
 }
 
+// ---- Tela Specification do PM (revisão do spec.md) ----
+
+const specBase = (repoId: string, n: number): string =>
+  `/api/repositories/${repoId}/workitems/feature/${n}`;
+
+export interface SpecVersion {
+  sha: string;
+  message: string;
+  committedAt: string;
+}
+
+export interface SpecMeta {
+  path: string;
+  content: string | null;
+  sha: string | null;
+  versions: SpecVersion[];
+}
+
+export interface SpecStatus {
+  hasSpec: boolean;
+  latestRun: { status: string; conclusion: string | null; url: string; createdAt: string } | null;
+}
+
+export type ReviewTriageState = 'pending' | 'accepted' | 'dismissed' | 'applied';
+
+export interface ReviewComment {
+  id: number;
+  author: string;
+  createdAt: string;
+  body: string;
+  anchor: { selectedText?: string } | null;
+  state: ReviewTriageState;
+  instruction: string | null;
+}
+
+export async function fetchSpecMeta(repoId: string, n: number): Promise<SpecMeta> {
+  return (await request(`${specBase(repoId, n)}/spec/meta`, { method: 'GET' })) as SpecMeta;
+}
+
+export async function fetchSpecBlob(repoId: string, n: number, sha: string): Promise<string> {
+  const json = await request(`${specBase(repoId, n)}/spec/blob/${sha}`, { method: 'GET' });
+  return (json as { content: string }).content;
+}
+
+export async function fetchSpecStatus(repoId: string, n: number): Promise<SpecStatus> {
+  return (await request(`${specBase(repoId, n)}/spec/status`, { method: 'GET' })) as SpecStatus;
+}
+
+export async function fetchReviewComments(repoId: string, n: number): Promise<ReviewComment[]> {
+  const json = await request(`${specBase(repoId, n)}/review-comments`, { method: 'GET' });
+  return (json as { comments: ReviewComment[] }).comments;
+}
+
+export async function setReviewTriage(
+  repoId: string,
+  n: number,
+  commentId: number,
+  state: ReviewTriageState,
+  instruction?: string,
+): Promise<void> {
+  await request(`${specBase(repoId, n)}/review-comments/${commentId}`, {
+    method: 'PATCH',
+    payload: { state, ...(instruction !== undefined ? { instruction } : {}) },
+  });
+}
+
+export async function replyReviewComment(repoId: string, n: number, body: string): Promise<void> {
+  await request(`${specBase(repoId, n)}/review-comments/reply`, {
+    method: 'POST',
+    payload: { body },
+  });
+}
+
+export async function approveSpec(
+  repoId: string,
+  n: number,
+  milestoneNumber: number | null,
+): Promise<void> {
+  await request(`${specBase(repoId, n)}/spec/approve`, {
+    method: 'POST',
+    payload: { milestoneNumber },
+    timeoutMs: 30_000,
+  });
+}
+
+export async function returnToPrioritization(repoId: string, n: number): Promise<void> {
+  await request(`${specBase(repoId, n)}/return-to-prioritization`, {
+    method: 'POST',
+    timeoutMs: 30_000,
+  });
+}
+
 // Reparent (drag-and-drop da árvore na tela Project): define `parentNumber` como
 // pai de `childNumber`. O server valida a hierarquia permitida e atualiza a
 // sub-issue nativa. Encadeia chamadas ao GitHub → timeout maior.

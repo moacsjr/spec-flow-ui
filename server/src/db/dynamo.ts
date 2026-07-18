@@ -447,6 +447,51 @@ export async function updateRefineJob(
   );
 }
 
+// ---------- Triagem de comentários de revisão de spec (tela Specification) ----------
+// Estado da triagem (aceito/descartado/aplicado) por comentário do GitHub. A
+// issue NÃO é alterada pela triagem — só por réplicas explícitas.
+
+export type SpecTriageState = 'pending' | 'accepted' | 'dismissed' | 'applied';
+
+export interface SpecTriageRecord {
+  tenantId: string;
+  repoId: string;
+  issueNumber: number;
+  commentId: number;
+  state: SpecTriageState;
+  instruction?: string; // instrução editada pelo PM (default: corpo do comentário)
+  updatedAt: string; // ISO
+}
+
+const specTriageKey = (t: SpecTriageRecord | { tenantId: string; repoId: string; issueNumber: number; commentId: number }) => ({
+  PK: `TENANT#${t.tenantId}`,
+  SK: `SPECTRIAGE#${t.repoId}#${t.issueNumber}#${t.commentId}`,
+});
+
+export async function putSpecTriage(rec: SpecTriageRecord): Promise<void> {
+  await doc().send(
+    new PutCommand({ TableName: TABLE, Item: { ...specTriageKey(rec), ...rec } }),
+  );
+}
+
+export async function querySpecTriage(
+  tenantId: string,
+  repoId: string,
+  issueNumber: number,
+): Promise<SpecTriageRecord[]> {
+  const res = await doc().send(
+    new QueryCommand({
+      TableName: TABLE,
+      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+      ExpressionAttributeValues: {
+        ':pk': `TENANT#${tenantId}`,
+        ':sk': `SPECTRIAGE#${repoId}#${issueNumber}#`,
+      },
+    }),
+  );
+  return (res.Items ?? []) as SpecTriageRecord[];
+}
+
 // TTL do Dynamo é eventual — reforça a expiração na leitura (como consumeState).
 export async function getRefineJob(tenantId: string, jobId: string): Promise<RefineJobRecord | null> {
   const out = await doc().send(

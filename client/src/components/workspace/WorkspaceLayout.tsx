@@ -23,6 +23,7 @@ import { PmDashboard } from './pm/PmDashboard';
 import { ProjectPage } from './pm/ProjectPage';
 import { BacklogPage } from './pm/BacklogPage';
 import { PrioritizationPage } from './pm/PrioritizationPage';
+import { SpecificationPage as PmSpecificationPage } from './pm/SpecificationPage';
 import { PlanningPage } from './pm/PlanningPage';
 import { Planning2Page } from './pm/Planning2Page';
 import { MilestonesTimelinePage } from './pm/MilestonesTimelinePage';
@@ -49,6 +50,7 @@ const PAGES: Record<WorkspaceRole, Record<string, ComponentType<WorkspacePagePro
     project: ProjectPage,
     backlog: BacklogPage,
     prioritization: PrioritizationPage,
+    specification: PmSpecificationPage,
     planning: PlanningPage,
     planning2: Planning2Page,
     milestones: MilestonesTimelinePage,

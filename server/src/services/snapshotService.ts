@@ -101,6 +101,14 @@ function pointsOf(issue: GhSnapshotIssue): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// "Rank": campo numérico do Project gravado na priorização do Backlog (ordem
+// fina definida na Prioritization). null = nunca priorizado.
+function rankOf(issue: GhSnapshotIssue): number | null {
+  const raw = issue.projectFieldValues['Rank'];
+  const n = raw != null ? Number.parseFloat(raw) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
 function priorityOf(labels: string[]): Priority | null {
   return (labels.find((n) => /^P[0-3]$/.test(n)) as Priority | undefined) ?? null;
 }
@@ -131,6 +139,7 @@ function toSnapshotItem(
     stage,
     stageRaw,
     points: pointsOf(issue),
+    rank: rankOf(issue),
     milestone: issue.milestone,
     assignees: issue.assignees.map((u) => ({ login: u.login, name: u.name ?? null })),
     parentNumber: issue.parentNumber,

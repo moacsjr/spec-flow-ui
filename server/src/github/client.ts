@@ -275,6 +275,10 @@ query RepoSnapshot($owner: String!, $repo: String!, $cursor: String) {
                   name
                   field { ... on ProjectV2SingleSelectField { name } }
                 }
+                ... on ProjectV2ItemFieldNumberValue {
+                  number
+                  field { ... on ProjectV2Field { name } }
+                }
               }
             }
           }
@@ -305,14 +309,15 @@ query RepoSnapshot($owner: String!, $repo: String!, $cursor: String) {
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function normalizeSnapshotIssue(node: any): GhSnapshotIssue {
-  // Todos os valores single-select de todos os boards da issue: campo → opção.
-  // O snapshotService decide qual campo é o de etapa (stageOptions do repo).
+  // Todos os valores single-select E numéricos de todos os boards da issue:
+  // campo → valor (números viram string; ex.: Rank). O snapshotService decide
+  // qual campo é o de etapa (stageOptions do repo).
   const projectFieldValues: Record<string, string> = {};
   for (const item of node.projectItems?.nodes ?? []) {
     for (const fv of item.fieldValues?.nodes ?? []) {
-      if (fv?.field?.name && typeof fv.name === 'string' && !(fv.field.name in projectFieldValues)) {
-        projectFieldValues[fv.field.name] = fv.name;
-      }
+      if (!fv?.field?.name || fv.field.name in projectFieldValues) continue;
+      if (typeof fv.name === 'string') projectFieldValues[fv.field.name] = fv.name;
+      else if (typeof fv.number === 'number') projectFieldValues[fv.field.name] = String(fv.number);
     }
   }
 
@@ -487,6 +492,136 @@ export async function fetchIssueComments(config: GitHubConfig, number: number): 
   if (!res.ok) throw new UpstreamError(`GitHub Issues API ${res.status}: ${await res.text()}`);
   const json = JSON.parse(await res.text()) as Array<{ body?: string }>;
   return json.map((c) => c.body ?? '');
+}
+
+// Comentário de issue com metadados (id/autor/data) — usado pela triagem de
+// revisões da spec (tela Specification do PM). 404 → [].
+export interface GhIssueComment {
+  id: number;
+  body: string;
+  author: string;
+  createdAt: string; // ISO
+}
+
+export async function fetchIssueCommentsFull(
+  config: GitHubConfig,
+  number: number,
+): Promise<GhIssueComment[]> {
+  const url = `https://api.github.com/repos/${config.owner}/${config.repo}/issues/${number}/comments?per_page=100`;
+  const res = await cachedGet(url, {
+    Authorization: `bearer ${config.token}`,
+    Accept: 'application/vnd.github+json',
+  });
+  if (res.status === 404) return [];
+  if (!res.ok) throw new UpstreamError(`GitHub Issues API ${res.status}: ${await res.text()}`);
+  const json = JSON.parse(await res.text()) as Array<{
+    id?: number;
+    body?: string;
+    user?: { login?: string };
+    created_at?: string;
+  }>;
+  return json
+    .filter((c) => typeof c.id === 'number')
+    .map((c) => ({
+      id: c.id as number,
+      body: c.body ?? '',
+      author: c.user?.login ?? '—',
+      createdAt: c.created_at ?? '',
+    }));
+}
+
+// Histórico de commits de um arquivo (REST /commits?path=...), mais recente
+// primeiro. É o histórico de versões do spec.md — v{n} = n-ésimo commit.
+export interface GhFileCommit {
+  sha: string;
+  message: string;
+  committedAt: string; // ISO
+}
+
+export async function listFileCommits(
+  config: GitHubConfig,
+  path: string,
+  limit = 30,
+): Promise<GhFileCommit[]> {
+  const url =
+    `https://api.github.com/repos/${config.owner}/${config.repo}/commits` +
+    `?path=${encodeURIComponent(path)}&per_page=${limit}`;
+  const res = await cachedGet(url, {
+    Authorization: `bearer ${config.token}`,
+    Accept: 'application/vnd.github+json',
+  });
+  if (res.status === 404) return [];
+  if (!res.ok) throw new UpstreamError(`GitHub Commits API ${res.status}: ${await res.text()}`);
+  const json = JSON.parse(await res.text()) as Array<{
+    sha?: string;
+    commit?: { message?: string; committer?: { date?: string }; author?: { date?: string } };
+  }>;
+  return json
+    .filter((c) => typeof c.sha === 'string')
+    .map((c) => ({
+      sha: c.sha as string,
+      message: (c.commit?.message ?? '').split('\n')[0],
+      committedAt: c.commit?.committer?.date ?? c.commit?.author?.date ?? '',
+    }));
+}
+
+// Lê um arquivo numa revisão específica (Contents API + ref). 404 → null.
+// Usado pelo diff de versões da spec.
+export async function fetchFileContentAtRef(
+  config: GitHubConfig,
+  path: string,
+  ref: string,
+): Promise<string | null> {
+  const url =
+    `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}` +
+    `?ref=${encodeURIComponent(ref)}`;
+  const res = await cachedGet(url, {
+    Authorization: `bearer ${config.token}`,
+    Accept: 'application/vnd.github.raw+json',
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new UpstreamError(`GitHub Contents API ${res.status}: ${await res.text()}`);
+  return res.text();
+}
+
+// Última execução de um workflow (Actions API). null = workflow inexistente ou
+// sem execuções. Best-effort para o estado "Erro" da fila de Specification.
+export interface GhWorkflowRun {
+  status: string; // queued | in_progress | completed
+  conclusion: string | null; // success | failure | ...
+  url: string;
+  createdAt: string;
+}
+
+export async function fetchLatestWorkflowRun(
+  config: GitHubConfig,
+  workflowFile: string,
+): Promise<GhWorkflowRun | null> {
+  const url =
+    `https://api.github.com/repos/${config.owner}/${config.repo}/actions/workflows/` +
+    `${encodeURIComponent(workflowFile)}/runs?per_page=1`;
+  const res = await cachedGet(url, {
+    Authorization: `bearer ${config.token}`,
+    Accept: 'application/vnd.github+json',
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new UpstreamError(`GitHub Actions API ${res.status}: ${await res.text()}`);
+  const json = JSON.parse(await res.text()) as {
+    workflow_runs?: Array<{
+      status?: string;
+      conclusion?: string | null;
+      html_url?: string;
+      created_at?: string;
+    }>;
+  };
+  const run = json.workflow_runs?.[0];
+  if (!run) return null;
+  return {
+    status: run.status ?? '',
+    conclusion: run.conclusion ?? null,
+    url: run.html_url ?? '',
+    createdAt: run.created_at ?? '',
+  };
 }
 
 // Atualiza título/corpo de uma issue (REST PATCH). Só envia os campos presentes.

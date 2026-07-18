@@ -44,6 +44,16 @@ import {
 } from '../controllers/ArtifactController.ts';
 import { getRepositorySnapshot } from '../controllers/SnapshotController.ts';
 import { postRepositoryInsight } from '../controllers/InsightsController.ts';
+import {
+  getFeatureReviewComments,
+  getFeatureSpecBlob,
+  getFeatureSpecMeta,
+  getFeatureSpecStatus,
+  patchReviewCommentTriage,
+  postReturnToPrioritization,
+  postReviewCommentReply,
+  postSpecApprove,
+} from '../controllers/SpecReviewController.ts';
 
 export const repositoryRoutes = Router();
 
@@ -182,6 +192,54 @@ repositoryRoutes.post(
 repositoryRoutes.post(
   '/repositories/:id/workitems/feature/:number/decompose',
   decomposeFeatureHandler,
+);
+
+// Tela Specification do PM: versões/status do spec.md, triagem de comentários
+// de revisão (marcador <!-- spec-review -->) e aprovação/retorno.
+repositoryRoutes.get('/repositories/:id/workitems/feature/:number/spec/meta', (req, res, next) => {
+  getFeatureSpecMeta(req, res, next).catch(next);
+});
+repositoryRoutes.get(
+  '/repositories/:id/workitems/feature/:number/spec/blob/:sha',
+  (req, res, next) => {
+    getFeatureSpecBlob(req, res, next).catch(next);
+  },
+);
+repositoryRoutes.get(
+  '/repositories/:id/workitems/feature/:number/spec/status',
+  (req, res, next) => {
+    getFeatureSpecStatus(req, res, next).catch(next);
+  },
+);
+repositoryRoutes.get(
+  '/repositories/:id/workitems/feature/:number/review-comments',
+  (req, res, next) => {
+    getFeatureReviewComments(req, res, next).catch(next);
+  },
+);
+repositoryRoutes.patch(
+  '/repositories/:id/workitems/feature/:number/review-comments/:commentId',
+  (req, res, next) => {
+    patchReviewCommentTriage(req, res, next).catch(next);
+  },
+);
+repositoryRoutes.post(
+  '/repositories/:id/workitems/feature/:number/review-comments/reply',
+  (req, res, next) => {
+    postReviewCommentReply(req, res, next).catch(next);
+  },
+);
+repositoryRoutes.post(
+  '/repositories/:id/workitems/feature/:number/spec/approve',
+  (req, res, next) => {
+    postSpecApprove(req, res, next).catch(next);
+  },
+);
+repositoryRoutes.post(
+  '/repositories/:id/workitems/feature/:number/return-to-prioritization',
+  (req, res, next) => {
+    postReturnToPrioritization(req, res, next).catch(next);
+  },
 );
 
 // POST /api/repositories/:id/ai/summary → AI insight/summary de um escopo
