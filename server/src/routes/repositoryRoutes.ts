@@ -11,9 +11,13 @@ import {
 } from '../controllers/RepositoryController.ts';
 import {
   archiveRepositoryWorkItem,
+  bulkArchiveWorkItems,
+  bulkPrioritizeWorkItems,
+  bulkReparentWorkItems,
   createRepositoryFeature,
   createRepositoryWorkItem,
   deleteRepositoryWorkItem,
+  prioritizeRepositoryWorkItem,
   getRepositoryWorkItem,
   reorderWorkItems,
   reparentWorkItem,
@@ -110,6 +114,21 @@ repositoryRoutes.delete('/repositories/:id/workitems/:level/:number', deleteRepo
 // o item + todos os descendentes (Backlog do PM).
 repositoryRoutes.post('/repositories/:id/workitems/:level/:number/archive', (req, res, next) => {
   archiveRepositoryWorkItem(req, res, next).catch(next);
+});
+
+// Backlog do PM — priorização (prioridade + etapa + rank) e operações em lote.
+// Os bulk vêm ANTES das rotas parametrizadas por clareza (shapes não colidem).
+repositoryRoutes.post('/repositories/:id/workitems/bulk/prioritize', (req, res, next) => {
+  bulkPrioritizeWorkItems(req, res, next).catch(next);
+});
+repositoryRoutes.post('/repositories/:id/workitems/bulk/reparent', (req, res, next) => {
+  bulkReparentWorkItems(req, res, next).catch(next);
+});
+repositoryRoutes.post('/repositories/:id/workitems/bulk/archive', (req, res, next) => {
+  bulkArchiveWorkItems(req, res, next).catch(next);
+});
+repositoryRoutes.post('/repositories/:id/workitems/:level/:number/prioritize', (req, res, next) => {
+  prioritizeRepositoryWorkItem(req, res, next).catch(next);
 });
 
 // PATCH /api/repositories/:id/workitems/:level/:number → edita título/corpo da issue.

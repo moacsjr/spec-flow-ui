@@ -21,6 +21,7 @@ import {
   addProjectItem,
   addSubIssue,
   createIssue,
+  createNumberField,
   setSubIssueParent,
   fetchEpicPayload,
   fetchEpicSummaries,
@@ -29,10 +30,12 @@ import {
   fetchIssueRef,
   fetchIssueTitle,
   fetchIssueTree,
+  fetchNumberField,
   fetchProjectItemId,
   fetchSingleSelectField,
   moveProjectStage,
   removeLabel,
+  setProjectItemNumberValue,
   updateIssue,
   updateIssueState,
   type GitHubConfig,
@@ -477,6 +480,114 @@ export async function setPriorityForRepository(
   }
 
   invalidateSnapshot(tenantId, id);
+}
+
+// Campo numérico do board onde o Backlog grava o rank inicial de priorização.
+const RANK_FIELD = 'Rank';
+
+// Priorização do Backlog (spec da tela): grava a prioridade (labels + board),
+// move a Etapa — Feature → 🎯 Priorizado, Spike → ✅ Ready (backlog técnico) —
+// e registra um Rank inicial. O Rank usa Date.now(): cresce monotonicamente,
+// então o item entra no FINAL do grupo da prioridade sem precisar ler os ranks
+// existentes (o reordenamento fino acontece na view Prioritization).
+export async function prioritizeWorkItemForRepository(
+  tenantId: string,
+  id: string,
+  number: number,
+  priority: Priority,
+): Promise<void> {
+  const config = await configForRepository(await getRepositoryOr404(tenantId, id));
+
+  const ref = await fetchIssueRef(config, number);
+  const type = typeFromTitle(ref.title);
+  if (type !== 'feature' && type !== 'spike') {
+    throw new HttpError(
+      422,
+      `A issue #${number} não é Feature nem Spike — o Backlog só prioriza esses tipos.`,
+    );
+  }
+
+  await setPriorityForRepository(tenantId, id, number, priority);
+  await setStageForRepository(tenantId, id, number, type === 'spike' ? 'Ready' : 'Priorizado');
+
+  // Rank inicial (best-effort): garante o campo numérico e grava o timestamp.
+  if (config.project) {
+    try {
+      const itemId = await fetchProjectItemId(config, number, config.project.projectId);
+      if (itemId) {
+        const field =
+          (await fetchNumberField(config, config.project.projectId, RANK_FIELD)) ??
+          (await createNumberField(config, config.project.projectId, RANK_FIELD));
+        await setProjectItemNumberValue(
+          config,
+          config.project.projectId,
+          itemId,
+          field.id,
+          Date.now(),
+        );
+      }
+    } catch (err) {
+      logger.warn(`Issue #${number}: priorizada, mas falhou ao gravar o Rank: ${(err as Error).message}`);
+    }
+  }
+
+  invalidateSnapshot(tenantId, id);
+}
+
+// Resultado por item das operações em lote do Backlog.
+export interface BulkResult {
+  number: number;
+  ok: boolean;
+  error?: string;
+}
+
+async function runBulk(
+  numbers: number[],
+  op: (n: number) => Promise<void>,
+): Promise<BulkResult[]> {
+  const results: BulkResult[] = [];
+  for (const n of numbers) {
+    try {
+      await op(n);
+      results.push({ number: n, ok: true });
+    } catch (err) {
+      results.push({ number: n, ok: false, error: (err as Error).message });
+    }
+  }
+  return results;
+}
+
+// Prioriza vários itens (sequencial; resposta por item — falha parcial possível).
+export async function bulkPrioritizeForRepository(
+  tenantId: string,
+  id: string,
+  numbers: number[],
+  priority: Priority,
+): Promise<BulkResult[]> {
+  return runBulk(numbers, (n) => prioritizeWorkItemForRepository(tenantId, id, n, priority));
+}
+
+// Move vários itens para um novo épico-pai (sequencial; resposta por item).
+export async function bulkReparentForRepository(
+  tenantId: string,
+  id: string,
+  numbers: number[],
+  parentNumber: number,
+): Promise<BulkResult[]> {
+  return runBulk(numbers, (n) => setWorkItemParentForRepository(tenantId, id, n, parentNumber));
+}
+
+// Arquiva (fecha) vários itens individualmente — sem cascata (itens do Backlog
+// não têm filhos). Sequencial; resposta por item.
+export async function bulkArchiveForRepository(
+  tenantId: string,
+  id: string,
+  numbers: number[],
+): Promise<BulkResult[]> {
+  const config = await configForRepository(await getRepositoryOr404(tenantId, id));
+  const results = await runBulk(numbers, (n) => updateIssueState(config, n, 'closed'));
+  invalidateSnapshot(tenantId, id);
+  return results;
 }
 
 // Label que sinaliza ao agente de IA que a Story deve entrar em desenvolvimento.

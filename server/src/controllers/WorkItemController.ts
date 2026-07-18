@@ -16,10 +16,14 @@ import type {
 import { STAGE_NAMES, WORK_ITEM_TYPES } from '@spec-flow/shared';
 import {
   archiveWorkItemSubtreeForRepository,
+  bulkArchiveForRepository,
+  bulkPrioritizeForRepository,
+  bulkReparentForRepository,
   createFeatureForRepository,
   createWorkItemForRepository,
   deleteWorkItemForRepository,
   loadWorkItemForRepository,
+  prioritizeWorkItemForRepository,
   setPriorityForRepository,
   setStageForRepository,
   setWorkItemParentForRepository,
@@ -238,6 +242,132 @@ export async function archiveRepositoryWorkItem(
       res.status(err.status).json({ error: err.message });
       return;
     }
+    next(err);
+  }
+}
+
+// ---- Backlog do PM: priorização + operações em lote ----
+
+function repoIdParamOr400(req: Request, res: Response): string | null {
+  const { id } = req.params;
+  if (!isValidRepoId(id)) {
+    res.status(400).json({ error: `Repositório inválido: "${id}".` });
+    return null;
+  }
+  return id;
+}
+
+function priorityOr400(res: Response, value: unknown): Priority | null {
+  if (!PRIORITIES.includes(value as Priority)) {
+    res.status(400).json({ error: `Prioridade inválida. Use uma de: ${PRIORITIES.join(', ')}.` });
+    return null;
+  }
+  return value as Priority;
+}
+
+function numbersOr400(res: Response, value: unknown): number[] | null {
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    !value.every((n) => Number.isInteger(n) && n > 0)
+  ) {
+    res.status(400).json({ error: 'numbers deve ser uma lista de números de issue (> 0).' });
+    return null;
+  }
+  return value as number[];
+}
+
+// POST /api/repositories/:id/workitems/:level/:number/prioritize — { priority }.
+// Grava prioridade + move a Etapa (Feature → Priorizado; Spike → Ready) + Rank.
+// O `:level` é decorativo (Spike não é um Level); valida repo + número.
+export async function prioritizeRepositoryWorkItem(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const id = repoIdParamOr400(req, res);
+  if (!id) return;
+  const n = Number(req.params.number);
+  if (!Number.isInteger(n) || n <= 0) {
+    res.status(400).json({ error: `Número inválido: "${req.params.number}".` });
+    return;
+  }
+  const priority = priorityOr400(res, ((req.body ?? {}) as Record<string, unknown>).priority);
+  if (!priority) return;
+
+  try {
+    await prioritizeWorkItemForRepository(tenantOf(req).tenantId, id, n, priority);
+    res.status(204).end();
+  } catch (err) {
+    if (err instanceof HttpError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    next(err);
+  }
+}
+
+// POST /api/repositories/:id/workitems/bulk/prioritize — { numbers, priority }.
+export async function bulkPrioritizeWorkItems(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const id = repoIdParamOr400(req, res);
+  if (!id) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const numbers = numbersOr400(res, body.numbers);
+  if (!numbers) return;
+  const priority = priorityOr400(res, body.priority);
+  if (!priority) return;
+
+  try {
+    res.json({ results: await bulkPrioritizeForRepository(tenantOf(req).tenantId, id, numbers, priority) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// POST /api/repositories/:id/workitems/bulk/reparent — { numbers, parentNumber }.
+export async function bulkReparentWorkItems(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const id = repoIdParamOr400(req, res);
+  if (!id) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const numbers = numbersOr400(res, body.numbers);
+  if (!numbers) return;
+  const parentNumber = Number(body.parentNumber);
+  if (!Number.isInteger(parentNumber) || parentNumber <= 0) {
+    res.status(400).json({ error: `parentNumber inválido: "${String(body.parentNumber)}".` });
+    return;
+  }
+
+  try {
+    res.json({
+      results: await bulkReparentForRepository(tenantOf(req).tenantId, id, numbers, parentNumber),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// POST /api/repositories/:id/workitems/bulk/archive — { numbers } (individual, sem cascata).
+export async function bulkArchiveWorkItems(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const id = repoIdParamOr400(req, res);
+  if (!id) return;
+  const numbers = numbersOr400(res, ((req.body ?? {}) as Record<string, unknown>).numbers);
+  if (!numbers) return;
+
+  try {
+    res.json({ results: await bulkArchiveForRepository(tenantOf(req).tenantId, id, numbers) });
+  } catch (err) {
     next(err);
   }
 }

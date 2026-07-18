@@ -41,6 +41,7 @@ export function normalizeStage(raw: string | null | undefined): StageName | null
   if (/\buat\b|homologacao|acceptance|aceitacao/.test(s)) return 'UAT';
   if (/\bqa\b|quality|teste/.test(s)) return 'QA';
   if (/done|conclu|finaliz|complete|shipped|entregue/.test(s)) return 'Done';
+  if (/prioriz|priorit/.test(s)) return 'Priorizado';
   if (/ready|pronto/.test(s)) return 'Ready';
   if (/dev|progress|andamento|doing|execucao|wip/.test(s)) return 'Development';
   if (/spec|especificacao/.test(s)) return 'Spec';

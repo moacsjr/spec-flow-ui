@@ -88,6 +88,65 @@ export async function archiveWorkItem(
   return json as { archived: number };
 }
 
+// Resultado por item das operações em lote do Backlog.
+export interface BulkResult {
+  number: number;
+  ok: boolean;
+  error?: string;
+}
+
+// Priorização do Backlog: prioridade + Etapa (Feature → Priorizado; Spike →
+// Ready) + rank inicial, numa única chamada.
+export async function prioritizeWorkItem(
+  repoId: string,
+  level: string,
+  number: number,
+  priority: Priority,
+): Promise<void> {
+  await request(`${itemBase(repoId, level, number)}/prioritize`, {
+    method: 'POST',
+    payload: { priority },
+    timeoutMs: 30_000,
+  });
+}
+
+const bulkBase = (repoId: string): string => `/api/repositories/${repoId}/workitems/bulk`;
+
+export async function bulkPrioritize(
+  repoId: string,
+  numbers: number[],
+  priority: Priority,
+): Promise<BulkResult[]> {
+  const json = await request(`${bulkBase(repoId)}/prioritize`, {
+    method: 'POST',
+    payload: { numbers, priority },
+    timeoutMs: 60_000,
+  });
+  return (json as { results: BulkResult[] }).results;
+}
+
+export async function bulkReparent(
+  repoId: string,
+  numbers: number[],
+  parentNumber: number,
+): Promise<BulkResult[]> {
+  const json = await request(`${bulkBase(repoId)}/reparent`, {
+    method: 'POST',
+    payload: { numbers, parentNumber },
+    timeoutMs: 60_000,
+  });
+  return (json as { results: BulkResult[] }).results;
+}
+
+export async function bulkArchive(repoId: string, numbers: number[]): Promise<BulkResult[]> {
+  const json = await request(`${bulkBase(repoId)}/archive`, {
+    method: 'POST',
+    payload: { numbers },
+    timeoutMs: 60_000,
+  });
+  return (json as { results: BulkResult[] }).results;
+}
+
 // Reparent (drag-and-drop da árvore na tela Project): define `parentNumber` como
 // pai de `childNumber`. O server valida a hierarquia permitida e atualiza a
 // sub-issue nativa. Encadeia chamadas ao GitHub → timeout maior.

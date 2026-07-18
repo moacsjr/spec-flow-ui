@@ -1110,4 +1110,106 @@ export async function moveProjectStage(
     throw new UpstreamError(`GitHub GraphQL: ${json.errors.map((e) => e.message).join('; ')}`);
   }
 }
+
+// ---- Campo numérico do Projects v2 (ex.: "Rank" do Backlog) ----
+
+// Localiza um campo numérico pelo nome. null = não existe no project.
+export async function fetchNumberField(
+  config: GitHubConfig,
+  projectId: string,
+  fieldName: string,
+): Promise<{ id: string } | null> {
+  const query = `
+    query GetNumberField($projectId: ID!) {
+      node(id: $projectId) {
+        ... on ProjectV2 {
+          fields(first: 50) {
+            nodes { ... on ProjectV2Field { id name dataType } }
+          }
+        }
+      }
+    }`;
+  const res = await fetch(ENDPOINT, {
+    method: 'POST',
+    headers: {
+      Authorization: `bearer ${config.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query, variables: { projectId } }),
+  });
+  if (!res.ok) throw new UpstreamError(`GitHub API ${res.status}: ${await res.text()}`);
+  const json = (await res.json()) as {
+    errors?: { message: string }[];
+    data?: { node?: { fields?: { nodes?: { id?: string; name?: string; dataType?: string }[] } } };
+  };
+  if (json.errors) {
+    throw new UpstreamError(`GitHub GraphQL: ${json.errors.map((e) => e.message).join('; ')}`);
+  }
+  const nodes = json.data?.node?.fields?.nodes ?? [];
+  const field = nodes.find((f) => f?.name === fieldName && f?.dataType === 'NUMBER');
+  return field?.id ? { id: field.id } : null;
+}
+
+// Cria um campo numérico no project (usado na primeira gravação do Rank).
+export async function createNumberField(
+  config: GitHubConfig,
+  projectId: string,
+  fieldName: string,
+): Promise<{ id: string }> {
+  const query = `
+    mutation CreateNumberField($projectId: ID!, $name: String!) {
+      createProjectV2Field(input: { projectId: $projectId, dataType: NUMBER, name: $name }) {
+        projectV2Field { ... on ProjectV2Field { id } }
+      }
+    }`;
+  const res = await fetch(ENDPOINT, {
+    method: 'POST',
+    headers: {
+      Authorization: `bearer ${config.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query, variables: { projectId, name: fieldName } }),
+  });
+  if (!res.ok) throw new UpstreamError(`GitHub API ${res.status}: ${await res.text()}`);
+  const json = (await res.json()) as {
+    errors?: { message: string }[];
+    data?: { createProjectV2Field?: { projectV2Field?: { id?: string } } };
+  };
+  if (json.errors) {
+    throw new UpstreamError(`GitHub GraphQL: ${json.errors.map((e) => e.message).join('; ')}`);
+  }
+  const id = json.data?.createProjectV2Field?.projectV2Field?.id;
+  if (!id) throw new UpstreamError('GitHub GraphQL: createProjectV2Field não retornou o id.');
+  return { id };
+}
+
+// Grava um valor numérico num item do project (updateProjectV2ItemFieldValue).
+export async function setProjectItemNumberValue(
+  config: GitHubConfig,
+  projectId: string,
+  itemId: string,
+  fieldId: string,
+  value: number,
+): Promise<void> {
+  const query = `
+    mutation SetNumberValue($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: Float!) {
+      updateProjectV2ItemFieldValue(input: {
+        projectId: $projectId, itemId: $itemId, fieldId: $fieldId,
+        value: { number: $value }
+      }) { projectV2Item { id } }
+    }`;
+  const res = await fetch(ENDPOINT, {
+    method: 'POST',
+    headers: {
+      Authorization: `bearer ${config.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query, variables: { projectId, itemId, fieldId, value } }),
+  });
+  if (!res.ok) throw new UpstreamError(`GitHub API ${res.status}: ${await res.text()}`);
+  const json = (await res.json()) as { errors?: { message: string }[] };
+  if (json.errors) {
+    throw new UpstreamError(`GitHub GraphQL: ${json.errors.map((e) => e.message).join('; ')}`);
+  }
+}
 /* eslint-enable @typescript-eslint/no-explicit-any */

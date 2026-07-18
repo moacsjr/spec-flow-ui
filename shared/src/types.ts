@@ -247,6 +247,7 @@ export type WorkspaceRole = 'pm' | 'tech' | 'dev';
 // normaliza o nome cru para este enum ao montar o snapshot.
 export type StageName =
   | 'Backlog'
+  | 'Priorizado'
   | 'Spec'
   | 'Plan'
   | 'Ready'
@@ -258,6 +259,7 @@ export type StageName =
 
 export const STAGE_NAMES: StageName[] = [
   'Backlog',
+  'Priorizado',
   'Spec',
   'Plan',
   'Ready',

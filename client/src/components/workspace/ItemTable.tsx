@@ -21,11 +21,15 @@ interface ItemTableProps {
   items: SnapshotItem[];
   columns: Column[];
   empty: string;
+  /** conteúdo customizado do estado vazio (sobrepõe `empty` quando presente). */
+  emptyNode?: ReactNode;
+  /** classe extra por linha (ex.: animação de saída, esmaecido). */
+  rowClassName?: (item: SnapshotItem) => string;
 }
 
-export function ItemTable({ items, columns, empty }: ItemTableProps) {
+export function ItemTable({ items, columns, empty, emptyNode, rowClassName }: ItemTableProps) {
   if (items.length === 0) {
-    return <p className="queue__empty">{empty}</p>;
+    return emptyNode ? <>{emptyNode}</> : <p className="queue__empty">{empty}</p>;
   }
 
   return (
@@ -42,7 +46,7 @@ export function ItemTable({ items, columns, empty }: ItemTableProps) {
         </thead>
         <tbody>
           {items.map((item) => (
-            <tr key={item.number}>
+            <tr key={item.number} className={rowClassName?.(item) || undefined}>
               {columns.map((c) => (
                 <td key={c.header} className={c.className}>
                   {c.cell(item)}

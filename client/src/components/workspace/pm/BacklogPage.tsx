@@ -1,30 +1,119 @@
-// Backlog do PM (RFC-003 §2): explorador do projeto em duas colunas.
-//   • Esquerda: árvore da hierarquia Iniciativa → Épico → Feature.
-//   • Direita: tabela com TODAS as Stories do projeto.
-// Clicar num nó da árvore (Iniciativa/Épico/Feature) filtra a tabela para as
-// Stories descendentes dele. Ações de topo: Create Idea (Feature sob um Épico),
-// AI Brainstorm.
+// Backlog do PM (spec "Tela de Backlog"): caixa de entrada de FEATURES/SPIKES.
+// Responde: o que chegou? (capturar) · onde se encaixa? (organizar) · o que
+// segue adiante? (priorizar). Projetada para ser ZERADA: priorizar um item o
+// move de etapa (Feature → 🎯 Priorizado; Spike → ✅ Ready) e o tira da tela
+// com animação otimista. Stories e Bugs jamais aparecem aqui.
+//
+// Layout: cabeçalho (contador + Nova feature + AI brainstorm) → faixa de
+// insights (client-side) → árvore Initiative→Epic (navegação; colapso
+// persistido) + tabela (Seleção/Feature/Área/Idade/Prioridade) com barra de
+// ações em lote. Clique no título abre a Feature em drawer lateral.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Priority, SnapshotItem } from '@spec-flow/shared';
+import type { Level, Priority, SnapshotItem, WorkItemView } from '@spec-flow/shared';
 import { PRIORITIES } from '@spec-flow/shared';
 import type { WorkspacePageProps } from '../types';
 import { ItemTable, type Column } from '../ItemTable';
-import { TypeBadge } from '../TypeBadge';
 import { AiSummary } from '../AiSummary';
-import { hrefForItem } from '../../../lib/router';
-import { isEpic, isOpen, isStory } from '../../../lib/workspaceSelectors';
+import { Mdx } from '../../Mdx';
+import { hrefForItem, hrefForWorkspace } from '../../../lib/router';
+import { isOpen } from '../../../lib/workspaceSelectors';
+import { isDescendantOf, itemsByNumber, typeSlug } from '../../../lib/workItemType';
+import { createWorkItem, fetchWorkItem } from '../../../data/workItem';
 import {
-  ancestorOfType,
-  isDescendantOf,
-  itemsByNumber,
-  typeOf,
-  typeSlug,
-} from '../../../lib/workItemType';
-import { createFeature } from '../../../data/workItem';
-import { archiveWorkItem, setPriority } from '../../../data/workspace';
+  archiveWorkItem,
+  bulkArchive,
+  bulkPrioritize,
+  bulkReparent,
+  prioritizeWorkItem,
+  type BulkResult,
+} from '../../../data/workspace';
+import { readCollapsed, writeCollapsed } from '../../../state/projectTreePrefs';
 
-// Checkbox com estado "indeterminado" (parcialmente selecionado) — só via ref.
+const DAY = 86_400_000;
+const AGE_DANGER_DAYS = 30;
+const EPIC_IDLE_DAYS = 60;
+const LEAVE_MS = 200; // duração da animação de saída da linha
+const AREAS = ['Frontend', 'Backend', 'Mobile', 'Infra', 'DevOps', 'Data'];
+const MONTHS_FULL = [
+  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+];
+
+// Tipos que compõem a árvore (navegação): Initiative → Epic.
+const TREE_TYPES = ['initiative', 'epic'];
+const TREE_RANK: Record<string, number> = { initiative: 0, epic: 1 };
+// Tipos que aparecem na tabela (unidade de trabalho do Backlog).
+const SCOPE_TYPES = new Set(['feature', 'spike']);
+
+// Escopo da tela: Feature/Spike abertos ainda não triados. Etapa null = item
+// fora do board — semanticamente também é "não triado" (inbox).
+function inBacklogScope(item: SnapshotItem): boolean {
+  return (
+    SCOPE_TYPES.has(typeSlug(item)) &&
+    isOpen(item) &&
+    (item.stage === 'Backlog' || item.stage === null)
+  );
+}
+
+// Itens já priorizados (toggle "Mostrar priorizadas"): somente leitura aqui.
+function inPrioritizedScope(item: SnapshotItem): boolean {
+  return SCOPE_TYPES.has(typeSlug(item)) && isOpen(item) && item.stage === 'Priorizado';
+}
+
+function ageDays(item: SnapshotItem): number {
+  const ms = Date.now() - Date.parse(item.createdAt);
+  return Number.isFinite(ms) && ms > 0 ? Math.floor(ms / DAY) : 0;
+}
+
+// Level válido para rotas de work item (Spike herda 'feature' na inferência).
+function levelOf(item: SnapshotItem): Level {
+  return item.level === 'epic' || item.level === 'story' ? item.level : 'feature';
+}
+
+// ---------- Toasts (mínimo local: stack fixa, ação opcional, auto-dismiss) ----------
+
+interface ToastItem {
+  id: number;
+  message: string;
+  action?: { label: string; run: () => void };
+}
+
+function ToastStack({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: number) => void }) {
+  if (toasts.length === 0) return null;
+  return (
+    <div className="bl-toasts" role="status">
+      {toasts.map((t) => (
+        <div key={t.id} className="bl-toast">
+          <span className="bl-toast__msg">{t.message}</span>
+          {t.action && (
+            <button
+              type="button"
+              className="btn btn--sm btn--accent"
+              onClick={() => {
+                onDismiss(t.id);
+                t.action?.run();
+              }}
+            >
+              {t.action.label}
+            </button>
+          )}
+          <button
+            type="button"
+            className="bl-toast__close"
+            onClick={() => onDismiss(t.id)}
+            aria-label="Fechar aviso"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ---------- Checkbox tri-state ----------
+
 function TriCheckbox({
   checked,
   indeterminate,
@@ -52,29 +141,7 @@ function TriCheckbox({
   );
 }
 
-// Tipos que compõem a árvore de hierarquia (Stories/Tasks ficam de fora).
-const TREE_TYPES = ['initiative', 'epic', 'feature'];
-const TREE_RANK: Record<string, number> = { initiative: 0, epic: 1, feature: 2 };
-
-function itemHref(repoId: string, item: SnapshotItem): { href: string; external: boolean } {
-  if (item.level === 'epic' || item.level === 'feature' || item.level === 'story') {
-    return { href: hrefForItem(repoId, item.level, item.number), external: false };
-  }
-  return { href: item.url, external: true };
-}
-
-// Célula "ancestral" (Feature/Epic/Iniciativa) — título com número esmaecido.
-function ancestorCell(item: SnapshotItem | null) {
-  return item ? (
-    <span className="proj-table__parent">
-      <span className="proj-table__parentnum">#{item.number}</span> {item.title}
-    </span>
-  ) : (
-    '—'
-  );
-}
-
-// ---------- Árvore da hierarquia ----------
+// ---------- Árvore (Initiative → Epic) ----------
 
 function ArchiveIcon() {
   return (
@@ -99,6 +166,7 @@ function ArchiveIcon() {
 interface TreeNodeProps {
   node: SnapshotItem;
   childrenMap: Map<number, SnapshotItem[]>;
+  countOf: (n: number) => number;
   depth: number;
   selected: number | null;
   onSelect: (n: number) => void;
@@ -109,7 +177,7 @@ interface TreeNodeProps {
 }
 
 function TreeNode(props: TreeNodeProps) {
-  const { node, childrenMap, depth, selected, onSelect, collapsed, onToggle, onArchive, archiving } =
+  const { node, childrenMap, countOf, depth, selected, onSelect, collapsed, onToggle, onArchive, archiving } =
     props;
   const kids = childrenMap.get(node.number) ?? [];
   const hasKids = kids.length > 0;
@@ -119,7 +187,7 @@ function TreeNode(props: TreeNodeProps) {
     <li className="bl-tree__node">
       <div
         className={`bl-tree__row${selected === node.number ? ' bl-tree__row--selected' : ''}`}
-        style={{ paddingLeft: depth * 16 + 6 }}
+        style={{ paddingLeft: depth * 14 + 4 }}
       >
         {hasKids ? (
           <button
@@ -141,9 +209,9 @@ function TreeNode(props: TreeNodeProps) {
           aria-pressed={selected === node.number}
           title={`#${node.number} ${node.title}`}
         >
-          <TypeBadge item={node} />
           <span className="bl-tree__title">{node.title}</span>
         </button>
+        <span className="bl-tree__count">{countOf(node.number)}</span>
         <button
           type="button"
           className="bl-tree__archive"
@@ -169,72 +237,89 @@ function TreeNode(props: TreeNodeProps) {
   );
 }
 
-// ---------- Formulário: criar ideia (Feature sob um Épico) ----------
+// ---------- Form interino de criação (Feature/Spike sob um épico) ----------
 
-function CreateIdeaForm({
+function NovaFeatureForm({
+  repoId,
   epics,
+  presetEpic,
   onCreated,
   onCancel,
-  repoId,
 }: {
   repoId: string;
   epics: SnapshotItem[];
+  presetEpic: number | null;
   onCreated: () => void;
   onCancel: () => void;
 }) {
+  const [type, setType] = useState<'feature' | 'spike'>('feature');
   const [title, setTitle] = useState('');
-  const [epicNumber, setEpicNumber] = useState(epics[0]?.number ?? 0);
-  const [description, setDescription] = useState('');
+  const [epicNumber, setEpicNumber] = useState(presetEpic ?? epics[0]?.number ?? 0);
+  const [area, setArea] = useState('');
   const [saving, setSaving] = useState(false);
+
+  if (epics.length === 0) {
+    return (
+      <p className="queue__empty">
+        Crie primeiro um Épico no projeto — toda Feature/Spike nasce sob um Épico.
+      </p>
+    );
+  }
 
   const submit = () => {
     if (!title.trim() || !epicNumber) return;
     setSaving(true);
-    createFeature(repoId, epicNumber, {
+    createWorkItem(repoId, {
+      type,
       title: title.trim(),
-      ...(description.trim() ? { descriptionMdx: description.trim() } : {}),
+      parentNumber: epicNumber,
+      ...(area ? { area } : {}),
     })
       .then(onCreated)
       .catch((err: Error) => alert(err.message))
       .finally(() => setSaving(false));
   };
 
-  if (epics.length === 0) {
-    return (
-      <p className="queue__empty">
-        Crie primeiro um Épico no repositório — toda ideia (Feature) nasce sob um Épico.
-      </p>
-    );
-  }
-
   return (
     <div className="idea-form">
-      <input
-        type="text"
-        className="idea-form__title"
-        placeholder="Título da ideia…"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-      />
-      <select
-        className="idea-form__epic"
-        value={epicNumber}
-        onChange={(e) => setEpicNumber(Number(e.target.value))}
-        aria-label="Épico pai"
-      >
-        {epics.map((epic) => (
-          <option key={epic.number} value={epic.number}>
-            #{epic.number} {epic.title}
-          </option>
-        ))}
-      </select>
-      <textarea
-        className="idea-form__desc"
-        placeholder="Descrição (opcional)…"
-        rows={3}
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-      />
+      <div className="bl-form__row">
+        <select
+          value={type}
+          onChange={(e) => setType(e.target.value as 'feature' | 'spike')}
+          aria-label="Tipo"
+        >
+          <option value="feature">Feature</option>
+          <option value="spike">Spike</option>
+        </select>
+        <input
+          type="text"
+          className="idea-form__title"
+          placeholder="Título…"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+      </div>
+      <div className="bl-form__row">
+        <select
+          value={epicNumber}
+          onChange={(e) => setEpicNumber(Number(e.target.value))}
+          aria-label="Épico pai"
+        >
+          {epics.map((epic) => (
+            <option key={epic.number} value={epic.number}>
+              #{epic.number} {epic.title}
+            </option>
+          ))}
+        </select>
+        <select value={area} onChange={(e) => setArea(e.target.value)} aria-label="Área">
+          <option value="">Área (opcional)</option>
+          {AREAS.map((a) => (
+            <option key={a} value={a}>
+              {a}
+            </option>
+          ))}
+        </select>
+      </div>
       <div className="idea-form__actions">
         <button type="button" className="btn btn--sm" onClick={onCancel}>
           Cancelar
@@ -245,34 +330,145 @@ function CreateIdeaForm({
           onClick={submit}
           disabled={saving || !title.trim()}
         >
-          {saving ? 'Criando…' : 'Criar ideia'}
+          {saving ? 'Criando…' : 'Criar'}
         </button>
       </div>
     </div>
   );
 }
 
+// ---------- Drawer compacto da Feature (interino — Feature View tem spec própria) ----------
+
+function FeatureDrawer({
+  repoId,
+  item,
+  onClose,
+}: {
+  repoId: string;
+  item: SnapshotItem;
+  onClose: () => void;
+}) {
+  const [state, setState] = useState<
+    { phase: 'loading' } | { phase: 'error'; message: string } | { phase: 'ready'; view: WorkItemView }
+  >({ phase: 'loading' });
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setState({ phase: 'loading' });
+    fetchWorkItem(repoId, levelOf(item), item.number, controller.signal)
+      .then((view) => setState({ phase: 'ready', view }))
+      .catch((err: Error) => {
+        if (!controller.signal.aborted) setState({ phase: 'error', message: err.message });
+      });
+    return () => controller.abort();
+  }, [repoId, item]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const slug = typeSlug(item);
+
+  return (
+    <>
+      <div className="bl-drawer-backdrop" onMouseDown={onClose} />
+      <aside className="bl-drawer" role="dialog" aria-label={`Item #${item.number}`}>
+        <div className="bl-drawer__head">
+          <span className={`proj-badge proj-badge--${slug}`}>
+            {slug === 'spike' ? 'SPIKE' : 'FEAT'}
+          </span>
+          <span className="bl-drawer__title">
+            <span className="mono">#{item.number}</span> {item.title}
+          </span>
+          <button type="button" className="bl-drawer__close" onClick={onClose} aria-label="Fechar">
+            ✕
+          </button>
+        </div>
+
+        <div className="bl-drawer__meta">
+          {item.area && <span className="chip">{item.area}</span>}
+          {(item.stageRaw ?? item.stage) && (
+            <span className="chip chip--stage">{item.stageRaw ?? item.stage}</span>
+          )}
+          {item.priority && (
+            <span className={`chip chip--${item.priority.toLowerCase()}`}>{item.priority}</span>
+          )}
+          <span className="chip">{ageDays(item)}d no backlog</span>
+        </div>
+
+        <div className="bl-drawer__body">
+          {state.phase === 'loading' && (
+            <p className="bl-drawer__loading">
+              <span className="spinner" aria-hidden="true" /> Carregando…
+            </p>
+          )}
+          {state.phase === 'error' && <p className="ai-panel__error">{state.message}</p>}
+          {state.phase === 'ready' &&
+            (state.view.descriptionMdx ? (
+              <Mdx source={state.view.descriptionMdx} />
+            ) : (
+              <p className="bl-drawer__loading">Sem descrição.</p>
+            ))}
+        </div>
+
+        <div className="bl-drawer__foot">
+          <a className="btn" href={hrefForItem(repoId, levelOf(item), item.number)}>
+            Abrir página completa →
+          </a>
+        </div>
+      </aside>
+    </>
+  );
+}
+
+// ---------- Página ----------
+
 export function BacklogPage({ repoId, snapshot, refresh }: WorkspacePageProps) {
+  // Cópia de trabalho (base do otimismo); re-sincroniza a cada snapshot.
+  const [working, setWorking] = useState<SnapshotItem[]>(snapshot.items);
+  const [leaving, setLeaving] = useState<Set<number>>(new Set());
+  useEffect(() => {
+    setWorking(snapshot.items);
+    setLeaving(new Set());
+  }, [snapshot.items]);
+
+  const [selectedNode, setSelectedNode] = useState<number | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<number>>(() => readCollapsed(repoId, 'backlog'));
+  const [showPrioritized, setShowPrioritized] = useState(false);
+  const [picked, setPicked] = useState<Set<number>>(new Set());
   const [creating, setCreating] = useState(false);
+  const [presetEpic, setPresetEpic] = useState<number | null>(null);
   const [brainstorm, setBrainstorm] = useState(false);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
-  const [picked, setPicked] = useState<Set<number>>(new Set()); // stories marcadas p/ ação em lote
-  const [savingIds, setSavingIds] = useState<Set<number>>(new Set()); // linhas com gravação em andamento
-  const [bulkSaving, setBulkSaving] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [drawerItem, setDrawerItem] = useState<SnapshotItem | null>(null);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const toastSeq = useRef(0);
 
-  const byNumber = useMemo(() => itemsByNumber(snapshot.items), [snapshot.items]);
+  const addToast = (message: string, action?: ToastItem['action']) => {
+    const id = ++toastSeq.current;
+    setToasts((ts) => [...ts, { id, message, action }]);
+    window.setTimeout(
+      () => setToasts((ts) => ts.filter((t) => t.id !== id)),
+      action ? 10_000 : 6_000,
+    );
+  };
+  const dismissToast = (id: number) => setToasts((ts) => ts.filter((t) => t.id !== id));
 
-  // Forest da hierarquia: raízes + filhos por número de pai, ordenados por
-  // rank (Iniciativa → Épico → Feature) e depois número. Só itens abertos —
-  // arquivar (fechar) remove o item do Backlog.
+  const byNumber = useMemo(() => itemsByNumber(working), [working]);
+
+  // Escopo global (independe do filtro da árvore) — alimenta contador + insights.
+  const backlogScope = useMemo(() => working.filter(inBacklogScope), [working]);
+
+  // Árvore Initiative → Epic (só abertos).
   const { roots, childrenMap } = useMemo(() => {
-    const hierItems = snapshot.items.filter((i) => TREE_TYPES.includes(typeSlug(i)) && isOpen(i));
-    const inTree = new Set(hierItems.map((i) => i.number));
+    const hier = working.filter((i) => TREE_TYPES.includes(typeSlug(i)) && isOpen(i));
+    const inTree = new Set(hier.map((i) => i.number));
     const map = new Map<number, SnapshotItem[]>();
     const rootList: SnapshotItem[] = [];
-    for (const item of hierItems) {
+    for (const item of hier) {
       const parent = item.parentNumber;
       if (parent != null && inTree.has(parent)) {
         const bucket = map.get(parent);
@@ -287,34 +483,212 @@ export function BacklogPage({ repoId, snapshot, refresh }: WorkspacePageProps) {
     rootList.sort(cmp);
     for (const bucket of map.values()) bucket.sort(cmp);
     return { roots: rootList, childrenMap: map };
-  }, [snapshot.items]);
+  }, [working]);
 
-  // Stories abertas do projeto (arquivadas/fechadas saem do Backlog).
-  const stories = useMemo(() => snapshot.items.filter((i) => isStory(i) && isOpen(i)), [snapshot.items]);
+  // Contador recursivo de não-triados sob um nó (árvore).
+  const countUnder = (n: number) =>
+    backlogScope.filter((i) => isDescendantOf(i, n, byNumber)).length;
 
-  const visibleStories = useMemo(
-    () =>
-      selected == null
-        ? stories
-        : stories.filter((s) => isDescendantOf(s, selected, byNumber)),
-    [stories, selected, byNumber],
+  // Linhas visíveis: escopo Backlog (+ priorizadas com o toggle), filtradas pelo
+  // nó e ordenadas do mais antigo para o mais novo (idade decrescente).
+  const rows = useMemo(() => {
+    const underNode = (i: SnapshotItem) =>
+      selectedNode == null || isDescendantOf(i, selectedNode, byNumber);
+    const base = backlogScope.filter(underNode);
+    const prioritized = showPrioritized
+      ? working.filter(inPrioritizedScope).filter(underNode)
+      : [];
+    return [...base, ...prioritized].sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }, [backlogScope, working, selectedNode, byNumber, showPrioritized]);
+
+  const epics = useMemo(
+    () => working.filter((i) => typeSlug(i) === 'epic' && isOpen(i)),
+    [working],
   );
+  const selectedItem = selectedNode != null ? byNumber.get(selectedNode) ?? null : null;
 
-  const epics = snapshot.items.filter((i) => isEpic(i) && isOpen(i));
+  // ---- Insights (client-side; máx. 2, envelhecimento primeiro) ----
+  const insights = useMemo(() => {
+    const list: string[] = [];
+    const aged = backlogScope.filter((i) => ageDays(i) > AGE_DANGER_DAYS).length;
+    if (aged > 0) {
+      list.push(
+        aged === 1
+          ? '1 feature está há mais de 30 dias sem triagem'
+          : `${aged} features estão há mais de 30 dias sem triagem`,
+      );
+    }
+    for (const epic of epics) {
+      const children = working.filter((i) => i.parentNumber === epic.number);
+      if (children.length === 0) continue;
+      const lastCreated = Math.max(...children.map((c) => Date.parse(c.createdAt)));
+      if (Number.isFinite(lastCreated) && Date.now() - lastCreated > EPIC_IDLE_DAYS * DAY) {
+        const month = MONTHS_FULL[new Date(lastCreated).getMonth()];
+        list.push(`o épico ${epic.title} não recebe itens novos desde ${month}`);
+        break; // um épico ocioso por vez
+      }
+    }
+    return list.slice(0, 2);
+  }, [backlogScope, epics, working]);
 
-  const selectedItem = selected != null ? byNumber.get(selected) ?? null : null;
-
-  const toggle = (n: number) =>
+  // ---- Colapso persistido ----
+  const toggleCollapse = (n: number) =>
     setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(n)) next.delete(n);
+      else next.add(n);
+      writeCollapsed(repoId, next, 'backlog');
+      return next;
+    });
+
+  // ---- Priorização otimista ----
+
+  // Aplica o efeito local da priorização (some do escopo do Backlog).
+  const applyLocalPrioritize = (numbers: number[], priority: Priority) =>
+    setWorking((items) =>
+      items.map((it) =>
+        numbers.includes(it.number)
+          ? { ...it, priority, stage: typeSlug(it) === 'spike' ? 'Ready' : 'Priorizado' }
+          : it,
+      ),
+    );
+
+  // Reverte itens (restaura o estado pré-otimismo a partir de uma cópia).
+  const revertItems = (originals: SnapshotItem[]) =>
+    setWorking((items) =>
+      items.map((it) => originals.find((o) => o.number === it.number) ?? it),
+    );
+
+  const handlePrioritize = (item: SnapshotItem, priority: Priority) => {
+    const original = { ...item };
+    // 1. anima a saída; 2. após a animação, remove do escopo (otimista).
+    setLeaving((s) => new Set(s).add(item.number));
+    window.setTimeout(() => {
+      applyLocalPrioritize([item.number], priority);
+      setLeaving((s) => {
+        const next = new Set(s);
+        next.delete(item.number);
+        return next;
+      });
+    }, LEAVE_MS);
+
+    prioritizeWorkItem(repoId, levelOf(item), item.number, priority)
+      .then(() => refresh())
+      .catch((err: Error) => {
+        revertItems([original]);
+        addToast(`Falha ao priorizar #${item.number}: ${err.message}`, {
+          label: 'Tentar novamente',
+          run: () => handlePrioritize(item, priority),
+        });
+      });
+  };
+
+  // ---- Seleção múltipla + ações em lote ----
+  const selectableRows = rows.filter(inBacklogScope);
+  const pickedVisible = selectableRows.filter((r) => picked.has(r.number));
+  const allChecked = selectableRows.length > 0 && pickedVisible.length === selectableRows.length;
+  const someChecked = pickedVisible.length > 0 && !allChecked;
+
+  const toggleOne = (n: number) =>
+    setPicked((prev) => {
       const next = new Set(prev);
       if (next.has(n)) next.delete(n);
       else next.add(n);
       return next;
     });
+  const toggleAll = () =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (allChecked) selectableRows.forEach((r) => next.delete(r.number));
+      else selectableRows.forEach((r) => next.add(r.number));
+      return next;
+    });
 
-  // Arquiva (fecha) o nó + todos os descendentes abertos, após confirmação.
-  const handleArchive = (node: SnapshotItem) => {
-    const total = snapshot.items.filter(
+  // Trata a resposta por item de um lote: reverte SÓ os que falharam.
+  const settleBulk = (
+    results: BulkResult[],
+    originals: SnapshotItem[],
+    retry: (failed: number[]) => void,
+  ) => {
+    const failed = results.filter((r) => !r.ok).map((r) => r.number);
+    if (failed.length > 0) {
+      revertItems(originals.filter((o) => failed.includes(o.number)));
+      addToast(`${failed.length} de ${results.length} itens falharam.`, {
+        label: 'Tentar novamente',
+        run: () => retry(failed),
+      });
+    }
+    refresh();
+  };
+
+  const applyBulkPriority = (priority: Priority, targetNumbers?: number[]) => {
+    const numbers = targetNumbers ?? [...picked];
+    const targets = working.filter((i) => numbers.includes(i.number));
+    if (targets.length === 0) return;
+    const originals = targets.map((t) => ({ ...t }));
+    setBulkSaving(true);
+    applyLocalPrioritize(numbers, priority);
+    setPicked(new Set());
+    bulkPrioritize(repoId, numbers, priority)
+      .then((results) => settleBulk(results, originals, (failed) => applyBulkPriority(priority, failed)))
+      .catch((err: Error) => {
+        revertItems(originals);
+        addToast(`Falha ao priorizar em lote: ${err.message}`, {
+          label: 'Tentar novamente',
+          run: () => applyBulkPriority(priority, numbers),
+        });
+      })
+      .finally(() => setBulkSaving(false));
+  };
+
+  const applyBulkMove = (parentNumber: number, targetNumbers?: number[]) => {
+    const numbers = targetNumbers ?? [...picked];
+    const targets = working.filter((i) => numbers.includes(i.number));
+    if (targets.length === 0) return;
+    const originals = targets.map((t) => ({ ...t }));
+    setBulkSaving(true);
+    setWorking((items) =>
+      items.map((it) => (numbers.includes(it.number) ? { ...it, parentNumber } : it)),
+    );
+    setPicked(new Set());
+    bulkReparent(repoId, numbers, parentNumber)
+      .then((results) => settleBulk(results, originals, (failed) => applyBulkMove(parentNumber, failed)))
+      .catch((err: Error) => {
+        revertItems(originals);
+        addToast(`Falha ao mover para o épico: ${err.message}`, {
+          label: 'Tentar novamente',
+          run: () => applyBulkMove(parentNumber, numbers),
+        });
+      })
+      .finally(() => setBulkSaving(false));
+  };
+
+  const applyBulkArchive = (targetNumbers?: number[]) => {
+    const numbers = targetNumbers ?? [...picked];
+    if (numbers.length === 0) return;
+    if (!targetNumbers && !confirm(`Arquivar ${numbers.length} item(ns)?`)) return;
+    const targets = working.filter((i) => numbers.includes(i.number));
+    const originals = targets.map((t) => ({ ...t }));
+    setBulkSaving(true);
+    setWorking((items) =>
+      items.map((it) => (numbers.includes(it.number) ? { ...it, state: 'closed' as const } : it)),
+    );
+    setPicked(new Set());
+    bulkArchive(repoId, numbers)
+      .then((results) => settleBulk(results, originals, (failed) => applyBulkArchive(failed)))
+      .catch((err: Error) => {
+        revertItems(originals);
+        addToast(`Falha ao arquivar: ${err.message}`, {
+          label: 'Tentar novamente',
+          run: () => applyBulkArchive(numbers),
+        });
+      })
+      .finally(() => setBulkSaving(false));
+  };
+
+  // ---- Arquivar em cascata pela árvore (mantido por decisão do usuário) ----
+  const handleArchiveNode = (node: SnapshotItem) => {
+    const total = working.filter(
       (i) => isOpen(i) && (i.number === node.number || isDescendantOf(i, node.number, byNumber)),
     ).length;
     const descendants = total - 1;
@@ -326,14 +700,10 @@ export function BacklogPage({ repoId, snapshot, refresh }: WorkspacePageProps) {
       '\n\nVocê pode reabri-las no GitHub depois.';
     if (!confirm(msg)) return;
     setArchiving(true);
-    if (selected === node.number) setSelected(null);
+    if (selectedNode === node.number) setSelectedNode(null);
     archiveWorkItem(repoId, typeSlug(node), node.number)
       .catch(() =>
-        // Subárvores grandes podem estourar o timeout do gateway enquanto o
-        // fechamento continua no servidor — o refresh abaixo reflete o estado real.
-        alert(
-          'O arquivamento demorou mais que o esperado e pode ainda estar concluindo no servidor. A lista será atualizada.',
-        ),
+        addToast('O arquivamento pode ainda estar concluindo no servidor. A lista será atualizada.'),
       )
       .finally(() => {
         setArchiving(false);
@@ -341,66 +711,7 @@ export function BacklogPage({ repoId, snapshot, refresh }: WorkspacePageProps) {
       });
   };
 
-  const busy = savingIds.size > 0 || bulkSaving;
-
-  const addSaving = (nums: number[]) =>
-    setSavingIds((prev) => new Set([...prev, ...nums]));
-  const clearSaving = (nums: number[]) =>
-    setSavingIds((prev) => {
-      const next = new Set(prev);
-      nums.forEach((n) => next.delete(n));
-      return next;
-    });
-
-  // ---- Multi-seleção para ação em lote ----
-  const pickedVisible = visibleStories.filter((s) => picked.has(s.number));
-  const allChecked = visibleStories.length > 0 && pickedVisible.length === visibleStories.length;
-  const someChecked = pickedVisible.length > 0 && !allChecked;
-
-  const toggleOne = (n: number) =>
-    setPicked((prev) => {
-      const next = new Set(prev);
-      if (next.has(n)) next.delete(n);
-      else next.add(n);
-      return next;
-    });
-
-  const toggleAll = () =>
-    setPicked((prev) => {
-      const next = new Set(prev);
-      if (allChecked) visibleStories.forEach((s) => next.delete(s.number));
-      else visibleStories.forEach((s) => next.add(s.number));
-      return next;
-    });
-
-  // Grava a prioridade de um item, com spinner na linha até recarregar o snapshot.
-  const setOnePriority = (item: SnapshotItem, priority: Priority | null) => {
-    addSaving([item.number]);
-    setPriority(repoId, item.level, item.number, priority)
-      .then(() => refresh())
-      .catch((err: Error) => alert(err.message))
-      .finally(() => clearSaving([item.number]));
-  };
-
-  // Aplica a prioridade a todas as stories marcadas (uma chamada por item).
-  const applyBulkPriority = (priority: Priority | null) => {
-    const targets = stories.filter((s) => picked.has(s.number));
-    if (targets.length === 0) return;
-    const nums = targets.map((s) => s.number);
-    setBulkSaving(true);
-    addSaving(nums);
-    Promise.all(targets.map((s) => setPriority(repoId, s.level, s.number, priority)))
-      .then(() => {
-        setPicked(new Set());
-        return refresh();
-      })
-      .catch((err: Error) => alert(err.message))
-      .finally(() => {
-        setBulkSaving(false);
-        clearSaving(nums);
-      });
-  };
-
+  // ---- Colunas ----
   const columns: Column[] = [
     {
       header: 'check',
@@ -410,109 +721,181 @@ export function BacklogPage({ repoId, snapshot, refresh }: WorkspacePageProps) {
           checked={allChecked}
           indeterminate={someChecked}
           onChange={toggleAll}
-          ariaLabel="Selecionar todas as stories visíveis"
+          ariaLabel="Selecionar todas as features visíveis"
         />
       ),
-      cell: (item) => (
-        <TriCheckbox
-          checked={picked.has(item.number)}
-          onChange={() => toggleOne(item.number)}
-          ariaLabel={`Selecionar #${item.number}`}
-        />
-      ),
-    },
-    {
-      header: 'Issue Id',
-      className: 'proj-table__id',
-      cell: (item) => {
-        const { href, external } = itemHref(repoId, item);
-        return (
-          <a href={href} {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}>
-            #{item.number}
-          </a>
-        );
-      },
-    },
-    { header: 'Type', cell: (item) => <TypeBadge item={item} /> },
-    {
-      header: 'Title',
-      className: 'proj-table__title',
-      cell: (item) => {
-        const { href, external } = itemHref(repoId, item);
-        return (
-          <a
-            className="proj-table__titlelink"
-            href={href}
-            {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}
-          >
-            {item.title}
-          </a>
-        );
-      },
-    },
-    { header: 'Feature', cell: (item) => ancestorCell(ancestorOfType(item, byNumber, 'feature')) },
-    { header: 'Epic', cell: (item) => ancestorCell(ancestorOfType(item, byNumber, 'epic')) },
-    {
-      header: 'Iniciativa',
-      cell: (item) => ancestorCell(ancestorOfType(item, byNumber, 'initiative')),
-    },
-    { header: 'Status', cell: (item) => (item.state === 'closed' ? 'Fechado' : 'Aberto') },
-    {
-      header: 'Etapa',
       cell: (item) =>
-        item.stageRaw ?? item.stage ? (
-          <span className="chip chip--stage">{item.stageRaw ?? item.stage}</span>
-        ) : (
-          '—'
-        ),
+        inBacklogScope(item) ? (
+          <TriCheckbox
+            checked={picked.has(item.number)}
+            onChange={() => toggleOne(item.number)}
+            ariaLabel={`Selecionar #${item.number}`}
+          />
+        ) : null,
     },
     {
-      header: 'Priority',
+      header: 'Feature',
+      className: 'bl-col-feature',
       cell: (item) => {
-        const saving = savingIds.has(item.number);
+        const slug = typeSlug(item);
         return (
-          <span className="bl-priocell">
-            <select
-              className="queue__priosel"
-              value={item.priority ?? ''}
-              disabled={saving || bulkSaving}
-              aria-label={`Prioridade de #${item.number}`}
-              onChange={(e) => setOnePriority(item, (e.target.value || null) as Priority | null)}
-            >
-              <option value="">—</option>
-              {PRIORITIES.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-            {saving && <span className="spinner" aria-hidden="true" />}
-          </span>
+          <button
+            type="button"
+            className="bl-featbtn"
+            onClick={() => setDrawerItem(item)}
+            title={item.title}
+          >
+            <span className={`proj-badge proj-badge--${slug}`}>
+              {slug === 'spike' ? 'SPIKE' : 'FEAT'}
+            </span>
+            <span className="mono bl-featbtn__num">#{item.number}</span>
+            <span className="bl-featbtn__title">{item.title}</span>
+          </button>
         );
       },
+    },
+    {
+      header: 'Área',
+      className: 'bl-col-area',
+      cell: (item) => item.area ?? <span className="pl2-dim">—</span>,
+    },
+    {
+      header: 'Idade',
+      className: 'bl-col-age',
+      cell: (item) => {
+        const days = ageDays(item);
+        return (
+          <span className={`mono${days > AGE_DANGER_DAYS ? ' bl-age--old' : ''}`}>{days}d</span>
+        );
+      },
+    },
+    {
+      header: 'Prioridade',
+      className: 'bl-col-prio',
+      cell: (item) =>
+        inBacklogScope(item) ? (
+          <select
+            className="queue__priosel"
+            value=""
+            disabled={leaving.has(item.number) || bulkSaving}
+            aria-label={`Prioridade de #${item.number}`}
+            title={
+              typeSlug(item) === 'spike'
+                ? 'Spikes priorizados vão direto ao backlog técnico'
+                : undefined
+            }
+            onChange={(e) => {
+              if (e.target.value) handlePrioritize(item, e.target.value as Priority);
+            }}
+          >
+            <option value="">—</option>
+            {PRIORITIES.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className={`chip chip--${item.priority?.toLowerCase() ?? 'p3'}`}>
+            {item.priority ?? '—'}
+          </span>
+        ),
     },
   ];
 
+  const rowClassName = (item: SnapshotItem) => {
+    const classes = ['bl-row'];
+    if (leaving.has(item.number)) classes.push('bl-row--leaving');
+    if (!inBacklogScope(item)) classes.push('bl-row--dim');
+    if (picked.has(item.number)) classes.push('bl-row--picked');
+    return classes.join(' ');
+  };
+
+  // ---- Estados vazios ----
+  const emptyNode =
+    roots.length === 0 ? (
+      <div className="bl-empty">
+        <span className="bl-empty__icon">🌱</span>
+        <p>O projeto ainda não tem Iniciativas nem Épicos.</p>
+        <div className="bl-empty__actions">
+          <button type="button" className="btn btn--sm btn--accent" onClick={() => setBrainstorm(true)}>
+            ✨ AI brainstorm
+          </button>
+          <a className="btn btn--sm" href={hrefForWorkspace('pm', 'project')}>
+            Criar estrutura na view Project
+          </a>
+        </div>
+      </div>
+    ) : selectedItem ? (
+      <div className="bl-empty">
+        <span className="bl-empty__icon">📭</span>
+        <p>Nenhum item sob {selectedItem.title}.</p>
+        <div className="bl-empty__actions">
+          <button
+            type="button"
+            className="btn btn--sm btn--accent"
+            onClick={() => {
+              setPresetEpic(typeSlug(selectedItem) === 'epic' ? selectedItem.number : null);
+              setCreating(true);
+            }}
+          >
+            + Nova feature
+          </button>
+        </div>
+      </div>
+    ) : (
+      <div className="bl-empty">
+        <span className="bl-empty__icon">🎉</span>
+        <p>Backlog zerado — nenhuma feature aguardando triagem.</p>
+        <div className="bl-empty__actions">
+          <button
+            type="button"
+            className="btn btn--sm btn--accent"
+            onClick={() => {
+              setPresetEpic(null);
+              setCreating(true);
+            }}
+          >
+            + Nova feature
+          </button>
+          <a className="btn btn--sm" href={hrefForWorkspace('pm', 'prioritization')}>
+            Ver Prioritization
+          </a>
+        </div>
+      </div>
+    );
+
   return (
     <div className="ws-page">
-      <div className="ws-toolbar">
+      {/* Cabeçalho */}
+      <div className="bl-head">
+        <span className="bl-head__count">
+          {backlogScope.length} feature{backlogScope.length === 1 ? '' : 's'} aguardando triagem
+        </span>
         <span className="ws-toolbar__spacer" />
         <button type="button" className="btn btn--sm" onClick={() => setBrainstorm((v) => !v)}>
-          ✨ AI Brainstorm
+          ✨ AI brainstorm
         </button>
         <button
           type="button"
           className="btn btn--sm btn--accent"
-          onClick={() => setCreating((v) => !v)}
+          onClick={() => {
+            setPresetEpic(null);
+            setCreating((v) => !v);
+          }}
         >
-          + Create Idea
+          + Nova feature
         </button>
       </div>
 
+      {/* Faixa de insights */}
+      {insights.length > 0 && <div className="bl-insights">💡 {insights.join('; ')}.</div>}
+
       {creating && (
-        <CreateIdeaForm
+        <NovaFeatureForm
           repoId={repoId}
           epics={epics}
+          presetEpic={presetEpic}
           onCancel={() => setCreating(false)}
           onCreated={() => {
             setCreating(false);
@@ -531,17 +914,18 @@ export function BacklogPage({ repoId, snapshot, refresh }: WorkspacePageProps) {
       )}
 
       <div className="bl-split">
+        {/* Árvore */}
         <aside className="bl-tree-pane">
           <div className="bl-pane__head">Hierarquia</div>
           <button
             type="button"
-            className={`bl-tree__all${selected == null ? ' bl-tree__row--selected' : ''}`}
-            onClick={() => setSelected(null)}
+            className={`bl-tree__all${selectedNode == null ? ' bl-tree__row--selected' : ''}`}
+            onClick={() => setSelectedNode(null)}
           >
-            Todo o projeto
+            Todas <span className="bl-tree__count">{backlogScope.length}</span>
           </button>
           {roots.length === 0 ? (
-            <p className="queue__empty">Sem Iniciativas/Épicos/Features no projeto.</p>
+            <p className="queue__empty">Sem Iniciativas/Épicos.</p>
           ) : (
             <ul className="bl-tree">
               {roots.map((node) => (
@@ -549,63 +933,82 @@ export function BacklogPage({ repoId, snapshot, refresh }: WorkspacePageProps) {
                   key={node.number}
                   node={node}
                   childrenMap={childrenMap}
+                  countOf={countUnder}
                   depth={0}
-                  selected={selected}
-                  onSelect={(n) => setSelected((cur) => (cur === n ? null : n))}
+                  selected={selectedNode}
+                  onSelect={(n) => setSelectedNode((cur) => (cur === n ? null : n))}
                   collapsed={collapsed}
-                  onToggle={toggle}
-                  onArchive={handleArchive}
+                  onToggle={toggleCollapse}
+                  onArchive={handleArchiveNode}
                   archiving={archiving}
                 />
               ))}
             </ul>
           )}
+          <label className="bl-tree-foot">
+            <input
+              type="checkbox"
+              className="bl-check"
+              checked={showPrioritized}
+              onChange={(e) => setShowPrioritized(e.target.checked)}
+            />
+            Mostrar priorizadas
+          </label>
         </aside>
 
+        {/* Tabela */}
         <div className="bl-stories-pane">
-          <div className="bl-pane__head">
-            Stories
-            {selectedItem && (
-              <span className="bl-pane__filter">
-                · {typeOf(selectedItem)} #{selectedItem.number} {selectedItem.title}
-                <button
-                  type="button"
-                  className="bl-pane__clear"
-                  onClick={() => setSelected(null)}
-                  aria-label="Limpar filtro"
-                >
-                  ✕
-                </button>
-              </span>
-            )}
-            <span className="ws-section__count">{visibleStories.length}</span>
-          </div>
-
-          {picked.size > 0 && (
+          {picked.size > 0 ? (
             <div className="bl-bulkbar">
               <span className="bl-bulkbar__count">{picked.size} selecionada(s)</span>
               <label className="bl-bulkbar__label">
-                Definir prioridade
+                Priorizar
                 <select
                   className="queue__priosel"
                   value=""
-                  disabled={busy}
-                  aria-label="Definir prioridade das selecionadas"
+                  disabled={bulkSaving}
+                  aria-label="Priorizar selecionadas"
                   onChange={(e) => {
-                    const v = e.target.value;
-                    if (v) applyBulkPriority(v === 'none' ? null : (v as Priority));
+                    if (e.target.value) applyBulkPriority(e.target.value as Priority);
                     e.target.value = '';
                   }}
                 >
-                  <option value="">Escolher…</option>
+                  <option value="">P?</option>
                   {PRIORITIES.map((p) => (
                     <option key={p} value={p}>
                       {p}
                     </option>
                   ))}
-                  <option value="none">Remover prioridade</option>
                 </select>
               </label>
+              <label className="bl-bulkbar__label">
+                Mover para épico
+                <select
+                  className="queue__priosel"
+                  value=""
+                  disabled={bulkSaving}
+                  aria-label="Mover selecionadas para um épico"
+                  onChange={(e) => {
+                    if (e.target.value) applyBulkMove(Number(e.target.value));
+                    e.target.value = '';
+                  }}
+                >
+                  <option value="">Escolher…</option>
+                  {epics.map((epic) => (
+                    <option key={epic.number} value={epic.number}>
+                      #{epic.number} {epic.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="btn btn--sm"
+                disabled={bulkSaving}
+                onClick={() => applyBulkArchive()}
+              >
+                Arquivar
+              </button>
               {bulkSaving && (
                 <span className="bl-bulkbar__status" role="status">
                   <span className="spinner" aria-hidden="true" /> Aplicando…
@@ -613,26 +1016,42 @@ export function BacklogPage({ repoId, snapshot, refresh }: WorkspacePageProps) {
               )}
               <button
                 type="button"
-                className="btn btn--sm"
+                className="btn btn--sm bl-bulkbar__clear"
                 onClick={() => setPicked(new Set())}
-                disabled={busy}
+                disabled={bulkSaving}
               >
                 Limpar seleção
               </button>
             </div>
+          ) : (
+            <div className="bl-pane__head">
+              Features
+              {selectedItem && (
+                <span className="bl-pane__filter">
+                  · {selectedItem.title}
+                  <button
+                    type="button"
+                    className="bl-pane__clear"
+                    onClick={() => setSelectedNode(null)}
+                    aria-label="Limpar filtro"
+                  >
+                    ✕
+                  </button>
+                </span>
+              )}
+              <span className="ws-section__count">{rows.length}</span>
+            </div>
           )}
 
-          <ItemTable
-            items={visibleStories}
-            columns={columns}
-            empty={
-              selected == null
-                ? 'Nenhuma Story no projeto.'
-                : 'Nenhuma Story sob o item selecionado.'
-            }
-          />
+          <ItemTable items={rows} columns={columns} empty="" emptyNode={emptyNode} rowClassName={rowClassName} />
         </div>
       </div>
+
+      {drawerItem && (
+        <FeatureDrawer repoId={repoId} item={drawerItem} onClose={() => setDrawerItem(null)} />
+      )}
+
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }
