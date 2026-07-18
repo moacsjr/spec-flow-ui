@@ -72,6 +72,8 @@ import {
   postQaReturn,
   postReturnToReady,
   postStartWork,
+  postUatApprove,
+  postUatReturn,
 } from '../controllers/ExecutionController.ts';
 import { getRepositorySnapshot } from '../controllers/SnapshotController.ts';
 import { postRepositoryInsight } from '../controllers/InsightsController.ts';
@@ -81,6 +83,7 @@ import {
   getFeatureReviewComments,
   getFeatureSpecBlob,
   getFeatureSpecMeta,
+  getFeatureSpecSection,
   getFeatureSpecStatus,
   patchReviewCommentTriage,
   postReturnToPrioritization,
@@ -196,6 +199,21 @@ repositoryRoutes.post('/repositories/:id/workitems/:level/:number/qa-approve', (
 repositoryRoutes.post('/repositories/:id/workitems/:level/:number/qa-return', (req, res, next) => {
   postQaReturn(req, res, next).catch(next);
 });
+
+// Homologação do PM: aceite de negócio (approve + verificação D4) e devolução
+// com marcador uat-return; seção da spec da Feature para o painel de validação.
+repositoryRoutes.post('/repositories/:id/workitems/:level/:number/uat-approve', (req, res, next) => {
+  postUatApprove(req, res, next).catch(next);
+});
+repositoryRoutes.post('/repositories/:id/workitems/:level/:number/uat-return', (req, res, next) => {
+  postUatReturn(req, res, next).catch(next);
+});
+repositoryRoutes.get(
+  '/repositories/:id/workitems/feature/:number/spec-section',
+  (req, res, next) => {
+    getFeatureSpecSection(req, res, next).catch(next);
+  },
+);
 
 // Workspace do Developer: pull (start), Tasks checáveis e retorno de QA.
 repositoryRoutes.post('/repositories/:id/workitems/:level/:number/start', (req, res, next) => {

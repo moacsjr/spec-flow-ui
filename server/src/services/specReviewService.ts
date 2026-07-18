@@ -99,6 +99,68 @@ export async function getSpecBlob(
   return content;
 }
 
+// ---- Extração de seção (Homologação do PM: "Critérios de aceite") ----
+
+const normalizeHeadingText = (s: string): string =>
+  s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+export interface SpecSection {
+  path: string;
+  heading: string | null; // heading encontrado (cru); null = spec sem a seção
+  content: string | null; // corpo da seção (sem o heading); null = não encontrada
+  hasSpec: boolean;
+}
+
+// Extrai a primeira seção cujo heading normalizado contém a consulta
+// normalizada (ex.: "criterios" casa "## Critérios de Aceite"). A seção vai até
+// o próximo heading de nível igual ou superior.
+export async function getSpecSectionForRepository(
+  tenantId: string,
+  repoId: string,
+  number: number,
+  headingQuery: string,
+): Promise<SpecSection> {
+  const config = await configFor(tenantId, repoId);
+  const path = await artifactPathOf(config, number, 'spec');
+  const content = await fetchFileContent(config, path);
+  if (content === null) return { path, heading: null, content: null, hasSpec: false };
+
+  const query = normalizeHeadingText(headingQuery);
+  const lines = content.split('\n');
+  let start = -1;
+  let level = 0;
+  let heading: string | null = null;
+  for (let i = 0; i < lines.length; i += 1) {
+    const m = lines[i].match(/^(#{1,6})\s+(.*)$/);
+    if (m && normalizeHeadingText(m[2]).includes(query)) {
+      start = i;
+      level = m[1].length;
+      heading = m[2].trim();
+      break;
+    }
+  }
+  if (start === -1) return { path, heading: null, content: null, hasSpec: true };
+
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const m = lines[i].match(/^(#{1,6})\s+/);
+    if (m && m[1].length <= level) {
+      end = i;
+      break;
+    }
+  }
+  return {
+    path,
+    heading,
+    content: lines.slice(start + 1, end).join('\n').trim(),
+    hasSpec: true,
+  };
+}
+
 // ---- Status (Gerando/Erro — best-effort) ----
 
 export interface SpecStatus {

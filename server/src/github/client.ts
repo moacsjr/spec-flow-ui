@@ -262,6 +262,7 @@ query RepoSnapshot($owner: String!, $repo: String!, $cursor: String) {
         url
         state
         createdAt
+        closedAt
         labels(first: 20) { nodes { name } }
         assignees(first: 5) { nodes { login name } }
         milestone { number title }
@@ -342,6 +343,7 @@ function normalizeSnapshotIssue(node: any): GhSnapshotIssue {
     url: node.url,
     state: node.state,
     createdAt: node.createdAt,
+    closedAt: node.closedAt ?? null,
     labels: (node.labels?.nodes ?? []).map((l: any) => l.name),
     assignees: (node.assignees?.nodes ?? []).map((u: any) => ({ login: u.login, name: u.name })),
     milestone: node.milestone

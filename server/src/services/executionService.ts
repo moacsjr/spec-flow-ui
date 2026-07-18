@@ -3,6 +3,7 @@
 // narrativo de progresso por milestone.
 
 import {
+  addLabel,
   createComment,
   createIssue,
   fetchIssueCommentsFull,
@@ -19,6 +20,7 @@ import {
 import { getUserPref, queryStageEntries } from '../db/dynamo.ts';
 import { generateText } from '../llm/openrouter.ts';
 import { HttpError } from '../lib/errors.ts';
+import { logger } from '../lib/logger.ts';
 import { invalidateSnapshot } from '../lib/snapshotCache.ts';
 import { consumeRefineOrThrow } from './quotaService.ts';
 import { tenantOpenrouterKey } from './settingsService.ts';
@@ -28,6 +30,9 @@ import { loadSnapshotForRepository } from './snapshotService.ts';
 
 const FIB = [1, 2, 3, 5, 8, 13, 21];
 const QA_RETURN_MARKER = '<!-- qa-return -->';
+const UAT_RETURN_MARKER = '<!-- uat-return -->';
+// Label de registro do fechamento automático da Feature (regra D4).
+export const FEATURE_DONE_LABEL = 'spec-wave:feature-done';
 
 async function configFor(tenantId: string, repoId: string): Promise<GitHubConfig> {
   return configForRepository(await getRepositoryOr404(tenantId, repoId));
@@ -103,8 +108,9 @@ export async function setTaskStateForRepository(
   invalidateSnapshot(tenantId, repoId);
 }
 
-// ---- Retorno de QA (badge no card do In Progress) ----
-// O motivo vive no último comentário com o marcador qa-return. O badge vale
+// ---- Retorno de QA/Homologação (badge no card do In Progress) ----
+// O motivo vive no último comentário com um dos marcadores de retorno (qa-return
+// do TL ou uat-return do PM — a origem identifica quem reprovou). O badge vale
 // para o ciclo atual de Desenvolvimento: comentário anterior à entrada corrente
 // na etapa (com tolerância — o comentário é postado ANTES do movimento) é ciclo
 // antigo e não conta.
@@ -114,10 +120,12 @@ export async function qaReturnInfoForRepository(
   tenantId: string,
   repoId: string,
   number: number,
-): Promise<{ reason: string; at: string } | null> {
+): Promise<{ reason: string; at: string; origin: 'qa' | 'uat' } | null> {
   const config = await configFor(tenantId, repoId);
   const comments = await fetchIssueCommentsFull(config, number);
-  const returns = comments.filter((c) => c.body.includes(QA_RETURN_MARKER));
+  const returns = comments.filter(
+    (c) => c.body.includes(QA_RETURN_MARKER) || c.body.includes(UAT_RETURN_MARKER),
+  );
   const last = returns[returns.length - 1];
   if (!last) return null;
 
@@ -130,11 +138,13 @@ export async function qaReturnInfoForRepository(
     return null; // retorno de um ciclo anterior — o item já saiu e voltou depois
   }
 
+  const origin: 'qa' | 'uat' = last.body.includes(UAT_RETURN_MARKER) ? 'uat' : 'qa';
   const reason = last.body
     .replace(QA_RETURN_MARKER, '')
-    .replace(/\*\*Retorno de QA:\*\*/, '')
+    .replace(UAT_RETURN_MARKER, '')
+    .replace(/\*\*Retorno (de QA|da Homologação):\*\*/, '')
     .trim();
-  return { reason, at: last.createdAt };
+  return { reason, at: last.createdAt, origin };
 }
 
 // ---- Devolver para Ready (Development) ----
@@ -169,18 +179,22 @@ export async function qaApproveForRepository(
   return { movedTo: target };
 }
 
-// Return to Development: motivo obrigatório postado como comentário com o
-// marcador qa-return; responsável preservado. `createBug` cria a issue [BUG]
-// vinculada (parent = Story, milestone herdado — regra D5) já em Ready.
-export async function qaReturnForRepository(
+// Return to Development (QA do TL e Homologação do PM — marcadores distintos
+// para o dev saber a ORIGEM da reprovação): motivo obrigatório postado como
+// comentário com o marcador; responsável preservado. `createBug` cria a issue
+// [BUG] vinculada (parent = Story, milestone herdado — regra D5) já em Ready.
+async function returnToDevelopment(
   tenantId: string,
   repoId: string,
   number: number,
   reason: string,
   createBug: boolean,
+  origin: 'qa' | 'uat',
 ): Promise<{ bugNumber: number | null }> {
   const config = await configFor(tenantId, repoId);
-  await createComment(config, number, `${QA_RETURN_MARKER}\n\n**Retorno de QA:** ${reason}`);
+  const marker = origin === 'qa' ? QA_RETURN_MARKER : UAT_RETURN_MARKER;
+  const prefix = origin === 'qa' ? '**Retorno de QA:**' : '**Retorno da Homologação:**';
+  await createComment(config, number, `${marker}\n\n${prefix} ${reason}`);
   await setStageForRepository(tenantId, repoId, number, 'Development');
 
   let bugNumber: number | null = null;
@@ -203,6 +217,94 @@ export async function qaReturnForRepository(
 
   invalidateSnapshot(tenantId, repoId);
   return { bugNumber };
+}
+
+export async function qaReturnForRepository(
+  tenantId: string,
+  repoId: string,
+  number: number,
+  reason: string,
+  createBug: boolean,
+): Promise<{ bugNumber: number | null }> {
+  return returnToDevelopment(tenantId, repoId, number, reason, createBug, 'qa');
+}
+
+export async function uatReturnForRepository(
+  tenantId: string,
+  repoId: string,
+  number: number,
+  reason: string,
+  createBug: boolean,
+): Promise<{ bugNumber: number | null }> {
+  return returnToDevelopment(tenantId, repoId, number, reason, createBug, 'uat');
+}
+
+// ---- Aceite de negócio (Homologação do PM) ----
+
+const isDoneItem = (i: { state: string; stage: string | null }): boolean =>
+  i.state === 'closed' || i.stage === 'Done';
+
+// Regra D4: a Feature fecha automaticamente quando TODAS as Stories filhas e
+// TODOS os Bugs filhos (diretos ou via Stories) estão em Done. Idempotente —
+// reavalia a condição e só age quando a Feature ainda está aberta. Exportada
+// para a rede de segurança do ciclo de polling (automationService).
+export async function featureDoneCheck(
+  tenantId: string,
+  repoId: string,
+  featureNumber: number,
+): Promise<boolean> {
+  const snapshot = await loadSnapshotForRepository(tenantId, repoId);
+  const feature = snapshot.items.find((i) => i.number === featureNumber);
+  if (!feature || feature.state !== 'open' || !feature.labels.includes('[FEATURE]')) return false;
+
+  const stories = snapshot.items.filter(
+    (i) => i.parentNumber === featureNumber && i.labels.includes('[STORY]'),
+  );
+  if (stories.length === 0) return false; // Feature sem Stories não fecha sozinha
+  const storyNumbers = new Set(stories.map((s) => s.number));
+  const bugs = snapshot.items.filter(
+    (i) =>
+      i.labels.includes('[BUG]') &&
+      i.parentNumber != null &&
+      (i.parentNumber === featureNumber || storyNumbers.has(i.parentNumber)),
+  );
+  if (!stories.every(isDoneItem) || !bugs.every(isDoneItem)) return false;
+
+  const config = await configFor(tenantId, repoId);
+  // Etapa Done no board e label de registro são best-effort; o fechamento da
+  // issue (com closedAt do GitHub como data registrada) é o ato que conta.
+  await setStageForRepository(tenantId, repoId, featureNumber, 'Done', 'automation').catch(
+    () => undefined,
+  );
+  await addLabel(config, featureNumber, FEATURE_DONE_LABEL).catch(() => undefined);
+  await updateIssueState(config, featureNumber, 'closed');
+  invalidateSnapshot(tenantId, repoId);
+  return true;
+}
+
+// Approve da Homologação: Story → Done + verificação D4 no mesmo ato. Falha na
+// verificação NÃO reverte o approve (a rede de segurança do polling reexecuta).
+export async function uatApproveForRepository(
+  tenantId: string,
+  repoId: string,
+  number: number,
+): Promise<{ featureClosed: boolean; featureNumber: number | null; pendingCheck: boolean }> {
+  await setStageForRepository(tenantId, repoId, number, 'Done');
+  invalidateSnapshot(tenantId, repoId);
+
+  try {
+    const snapshot = await loadSnapshotForRepository(tenantId, repoId, { fresh: true });
+    const story = snapshot.items.find((i) => i.number === number);
+    const featureNumber = story?.parentNumber ?? null;
+    if (featureNumber == null) return { featureClosed: false, featureNumber: null, pendingCheck: false };
+    const featureClosed = await featureDoneCheck(tenantId, repoId, featureNumber);
+    return { featureClosed, featureNumber, pendingCheck: false };
+  } catch (err) {
+    logger.warn(
+      `Homologação #${number}: approve ok, mas a verificação D4 falhou (reexecuta no polling): ${(err as Error).message}`,
+    );
+    return { featureClosed: false, featureNumber: null, pendingCheck: true };
+  }
 }
 
 // ---- Resumo narrativo de progresso por milestone (Progress) ----

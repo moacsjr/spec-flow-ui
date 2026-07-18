@@ -448,10 +448,12 @@ export async function setTaskState(
   });
 }
 
-// Retorno de QA do ciclo corrente de Desenvolvimento (badge do card).
+// Retorno do ciclo corrente de Desenvolvimento (badge do card): a origem
+// distingue a reprovação do QA (TL) da reprovação da Homologação (PM).
 export interface QaReturnInfo {
   reason: string;
   at: string;
+  origin: 'qa' | 'uat';
 }
 
 export async function fetchQaReturnInfo(
@@ -463,6 +465,55 @@ export async function fetchQaReturnInfo(
     timeoutMs: 30_000,
   });
   return json as QaReturnInfo | null;
+}
+
+// ---- Homologação do PM (aceite de negócio) ----
+
+// Approve: Story → Done + verificação D4 (fechamento automático da Feature).
+export async function uatApprove(
+  repoId: string,
+  number: number,
+): Promise<{ featureClosed: boolean; featureNumber: number | null; pendingCheck: boolean }> {
+  const json = await request(`${itemBase(repoId, 'story', number)}/uat-approve`, {
+    method: 'POST',
+    timeoutMs: 60_000,
+  });
+  return json as { featureClosed: boolean; featureNumber: number | null; pendingCheck: boolean };
+}
+
+// Return to Development da Homologação (marcador uat-return; bug opcional).
+export async function uatReturn(
+  repoId: string,
+  number: number,
+  reason: string,
+  createBug: boolean,
+): Promise<{ bugNumber: number | null }> {
+  const json = await request(`${itemBase(repoId, 'story', number)}/uat-return`, {
+    method: 'POST',
+    payload: { reason, createBug },
+    timeoutMs: 60_000,
+  });
+  return json as { bugNumber: number | null };
+}
+
+// Seção do spec.md da Feature (ex.: "Critérios de aceite") para o painel.
+export interface SpecSection {
+  path: string;
+  heading: string | null;
+  content: string | null;
+  hasSpec: boolean;
+}
+
+export async function fetchSpecSection(
+  repoId: string,
+  featureNumber: number,
+  heading: string,
+): Promise<SpecSection> {
+  const json = await request(
+    `${itemBase(repoId, 'feature', featureNumber)}/spec-section?heading=${encodeURIComponent(heading)}`,
+    { method: 'GET', timeoutMs: 30_000 },
+  );
+  return json as SpecSection;
 }
 
 // ---- Plan view do TL (plan.md + decomposição) ----

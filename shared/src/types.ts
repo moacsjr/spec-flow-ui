@@ -321,6 +321,7 @@ export interface SnapshotItem {
   assignees: { login: string; name: string | null }[];
   parentNumber: number | null;
   createdAt: string; // ISO
+  closedAt: string | null; // ISO; null = aberta (métrica de entregas D4 do Dashboard)
   progress: { total: number; completed: number } | null; // subIssuesSummary
   prs: PullRequestRef[];
 }

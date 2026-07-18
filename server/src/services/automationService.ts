@@ -26,6 +26,7 @@ import type { ProjectSnapshot, SnapshotItem, StageName } from '@spec-flow/shared
 import { queryStageLast, type StageLastRecord } from '../db/dynamo.ts';
 import { logger } from '../lib/logger.ts';
 import { setStageForRepository } from './workItemService.ts';
+import { featureDoneCheck } from './executionService.ts';
 
 const THROTTLE_MS = 60_000;
 
@@ -94,6 +95,8 @@ async function reconcile(
   repoId: string,
   snapshot: ProjectSnapshot,
 ): Promise<void> {
+  await closeCompletedFeatures(tenantId, repoId, snapshot);
+
   const candidates = snapshot.items.filter(
     (i) =>
       i.state === 'open' &&
@@ -121,6 +124,42 @@ async function reconcile(
       logger.warn(
         `Automação: falha ao mover #${item.number} para ${target}: ${(err as Error).message}`,
       );
+    }
+  }
+}
+
+// Rede de segurança da regra D4: fecha Features completas cujo fechamento no
+// ato do Approve falhou (ou cujos Bugs foram concluídos por fora). Os
+// candidatos são filtrados no snapshot local; o featureDoneCheck revalida com
+// dados frescos antes de agir (idempotente).
+const isDone = (i: SnapshotItem): boolean => i.state === 'closed' || i.stage === 'Done';
+
+async function closeCompletedFeatures(
+  tenantId: string,
+  repoId: string,
+  snapshot: ProjectSnapshot,
+): Promise<void> {
+  const features = snapshot.items.filter(
+    (i) => i.state === 'open' && i.labels.includes('[FEATURE]'),
+  );
+  for (const feature of features) {
+    const stories = snapshot.items.filter(
+      (i) => i.parentNumber === feature.number && i.labels.includes('[STORY]'),
+    );
+    if (stories.length === 0 || !stories.every(isDone)) continue;
+    const storyNumbers = new Set(stories.map((s) => s.number));
+    const bugs = snapshot.items.filter(
+      (i) =>
+        i.labels.includes('[BUG]') &&
+        i.parentNumber != null &&
+        (i.parentNumber === feature.number || storyNumbers.has(i.parentNumber)),
+    );
+    if (!bugs.every(isDone)) continue;
+    try {
+      const closed = await featureDoneCheck(tenantId, repoId, feature.number);
+      if (closed) logger.info(`D4: Feature #${feature.number} fechada automaticamente (${repoId}).`);
+    } catch (err) {
+      logger.warn(`D4: falha ao fechar a Feature #${feature.number}: ${(err as Error).message}`);
     }
   }
 }
