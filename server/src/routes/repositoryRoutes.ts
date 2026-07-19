@@ -76,6 +76,7 @@ import {
   postUatReturn,
 } from '../controllers/ExecutionController.ts';
 import { getRepositorySnapshot } from '../controllers/SnapshotController.ts';
+import { getDiscussions, postDiscussion } from '../controllers/DiscussionController.ts';
 import { postRepositoryInsight } from '../controllers/InsightsController.ts';
 import {
   getFeaturePlanBlob,
@@ -214,6 +215,14 @@ repositoryRoutes.get(
     getFeatureSpecSection(req, res, next).catch(next);
   },
 );
+
+// Discussão integrada: canal Slack por Feature + indicadores das filas.
+repositoryRoutes.post('/repositories/:id/workitems/:level/:number/discussion', (req, res, next) => {
+  postDiscussion(req, res, next).catch(next);
+});
+repositoryRoutes.get('/repositories/:id/discussions', (req, res, next) => {
+  getDiscussions(req, res, next).catch(next);
+});
 
 // Workspace do Developer: pull (start), Tasks checáveis e retorno de QA.
 repositoryRoutes.post('/repositories/:id/workitems/:level/:number/start', (req, res, next) => {

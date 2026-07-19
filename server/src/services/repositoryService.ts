@@ -24,6 +24,7 @@ import {
 import { isValidHttpUrl } from '../lib/validation.ts';
 import { HttpError, NotFoundError } from '../lib/errors.ts';
 import { assertRepoQuota } from './quotaService.ts';
+import { encryptSlackToken } from '../chat/chatSettings.ts';
 
 export type { RepositoryRecord };
 
@@ -52,6 +53,7 @@ export function toRepositoryDTO(record: RepositoryRecord): Repository {
     createdAt: record.createdAt,
     projectUrl: record.projectUrl ?? null,
     wipThreshold: record.wipThreshold ?? null,
+    slackConfigured: Boolean(record.slackTokenCiphertext),
   };
 }
 
@@ -179,7 +181,12 @@ export async function createRepository(
 export async function updateRepository(
   tenantId: string,
   id: string,
-  input: { url?: string; projectUrl?: string; wipThreshold?: number | null },
+  input: {
+    url?: string;
+    projectUrl?: string;
+    wipThreshold?: number | null;
+    slackBotToken?: string;
+  },
 ): Promise<Repository> {
   const record = await getRepositoryOr404(tenantId, id);
   const previousUrl = record.url;
@@ -217,6 +224,11 @@ export async function updateRepository(
       );
       Object.assign(updated, projectFields(projectUrl, project));
     }
+  }
+
+  if (input.slackBotToken !== undefined) {
+    const token = input.slackBotToken.trim();
+    updated.slackTokenCiphertext = token ? await encryptSlackToken(tenantId, token) : null;
   }
 
   if (input.wipThreshold !== undefined) {

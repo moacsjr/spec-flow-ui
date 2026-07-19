@@ -21,6 +21,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SnapshotItem } from '@spec-flow/shared';
 import type { WorkspacePageProps } from '../types';
 import { ToastStack, useToasts } from '../Toasts';
+import { DiscussButton, DiscussionDot, useDiscussions } from '../discussion';
 import { DiffPanel } from '../DiffPanel';
 import { Mdx } from '../../Mdx';
 import { hrefForItem, hrefForWorkspace } from '../../../lib/router';
@@ -115,12 +116,14 @@ function CommentCard({
   onAccept,
   onDismiss,
   onReply,
+  discuss,
 }: {
   comment: ReviewComment;
   busy: boolean;
   onAccept: (instruction: string) => void;
   onDismiss: (reply: string | null) => void;
   onReply: (body: string) => void;
+  discuss?: React.ReactNode; // botão "Discutir no chat" (comentários publicados)
 }) {
   const [mode, setMode] = useState<'idle' | 'accept' | 'dismiss' | 'reply'>('idle');
   const [text, setText] = useState('');
@@ -146,6 +149,7 @@ function CommentCard({
         <span className="sp-comment__author">{comment.author}</span>
         <span className="sp-comment__time">{waitingSince(comment.createdAt)}</span>
         {stateChip && <span className={`sp-comment__state ${stateChip.cls}`}>{stateChip.label}</span>}
+        {discuss && <span className="sp-comment__discuss">{discuss}</span>}
       </div>
       <p className="sp-comment__body">{comment.body}</p>
 
@@ -255,6 +259,8 @@ export function SpecificationPage({
   const { toasts, addToast, dismissToast } = useToasts();
   const docRef = useRef<HTMLDivElement>(null);
   const blobCache = useRef<Map<string, string>>(new Map());
+  const slackOn = Boolean(snapshot.repository.slackConfigured);
+  const { discussions, reloadDiscussions } = useDiscussions(repoId, slackOn, snapshot.generatedAt);
 
   // ---- fila ----
   const queue = useMemo(() => {
@@ -655,6 +661,7 @@ export function SpecificationPage({
                 >
                   <span className="sp-queue__title">
                     <span className="mono">#{item.number}</span> {item.title}
+                    <DiscussionDot discussion={discussions.get(item.number)} />
                   </span>
                   <span className="sp-queue__status">
                     {sub === 'returned' &&
@@ -780,6 +787,23 @@ export function SpecificationPage({
                             if (replyText) reply(selectedItem.number, c.author, replyText);
                           }}
                           onReply={(body) => reply(selectedItem.number, c.author, body)}
+                          discuss={
+                            slackOn ? (
+                              <DiscussButton
+                                repoId={repoId}
+                                featureNumber={selectedItem.number}
+                                commentId={c.id}
+                                discussion={discussions.get(selectedItem.number)}
+                                onOpened={reloadDiscussions}
+                                onError={(msg, retry) =>
+                                  addToast(`Falha ao abrir a discussão: ${msg}`, {
+                                    label: 'Tentar novamente',
+                                    run: retry,
+                                  })
+                                }
+                              />
+                            ) : undefined
+                          }
                         />
                       ))
                     )}

@@ -27,6 +27,7 @@ import { queryStageLast, type StageLastRecord } from '../db/dynamo.ts';
 import { logger } from '../lib/logger.ts';
 import { setStageForRepository } from './workItemService.ts';
 import { featureDoneCheck } from './executionService.ts';
+import { archiveClosedFeatureDiscussions } from './discussionService.ts';
 
 const THROTTLE_MS = 60_000;
 
@@ -96,6 +97,17 @@ async function reconcile(
   snapshot: ProjectSnapshot,
 ): Promise<void> {
   await closeCompletedFeatures(tenantId, repoId, snapshot);
+
+  // Rede de segurança da discussão integrada: canais ativos de Features já
+  // fechadas (arquivamento do D4 falhou ou a issue fechou por fora).
+  const closedFeatures = new Set(
+    snapshot.items
+      .filter((i) => i.state === 'closed' && i.labels.includes('[FEATURE]'))
+      .map((i) => i.number),
+  );
+  if (closedFeatures.size > 0) {
+    await archiveClosedFeatureDiscussions(tenantId, repoId, closedFeatures).catch(() => undefined);
+  }
 
   const candidates = snapshot.items.filter(
     (i) =>

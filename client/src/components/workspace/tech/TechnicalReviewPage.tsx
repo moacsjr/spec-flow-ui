@@ -16,8 +16,10 @@ import { DiffPanel } from '../DiffPanel';
 import { ToastStack, useToasts } from '../Toasts';
 import { isFeature, isOpen, waitingSince } from '../../../lib/workspaceSelectors';
 import { approvePlan, refineArtifact, saveArtifact } from '../../../data/workItem';
+import { DiscussButton, DiscussionDot, useDiscussions } from '../discussion';
 import {
   createReviewDraft,
+  fetchReviewComments,
   deleteReviewDraft,
   fetchDecomposition,
   fetchPlanBlob,
@@ -35,6 +37,7 @@ import {
   type PlanValidation,
   type PlanStatus,
   type ProposalStory,
+  type ReviewComment,
   type ReviewDraft,
   type SpecMeta,
 } from '../../../data/workspace';
@@ -73,8 +76,21 @@ export function TechnicalReviewPage({ repoId, snapshot, refresh }: WorkspacePage
   const [diff, setDiff] = useState<{ base: string; head: string } | null>(null);
   const [editCount, setEditCount] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [specCommentsBy, setSpecCommentsBy] = useState<Map<number, ReviewComment[]>>(new Map());
   const { toasts, addToast, dismissToast } = useToasts();
+  const slackOn = Boolean(snapshot.repository.slackConfigured);
+  const { discussions, reloadDiscussions } = useDiscussions(repoId, slackOn, snapshot.generatedAt);
   const docRef = useRef<HTMLDivElement>(null);
+
+  // Comentários publicados da spec (aba Spec) — carregados sob demanda.
+  useEffect(() => {
+    if (tab !== 'spec' || selected == null || specCommentsBy.has(selected)) return;
+    const n = selected;
+    fetchReviewComments(repoId, n)
+      .then((list) => setSpecCommentsBy((m) => new Map(m).set(n, list)))
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, selected, repoId]);
   const blobCache = useRef<Map<string, string>>(new Map());
 
   // ---- fila: etapa Plan COM plan.md ----
@@ -452,6 +468,7 @@ export function TechnicalReviewPage({ repoId, snapshot, refresh }: WorkspacePage
                     >
                       <span className="sp-queue__title">
                         <span className="mono">#{item.number}</span> {item.title}
+                        <DiscussionDot discussion={discussions.get(item.number)} />
                       </span>
                       <span className="sp-queue__status">{status}</span>
                     </button>
@@ -681,6 +698,35 @@ export function TechnicalReviewPage({ repoId, snapshot, refresh }: WorkspacePage
                         </div>
                       ))}
                     </div>
+
+                    {/* Comentários publicados da spec (discussão integrada) */}
+                    {(specCommentsBy.get(selectedItem.number)?.length ?? 0) > 0 && (
+                      <div className="tl-cycle">
+                        <div className="tl-cycle__head">Comentários publicados</div>
+                        {specCommentsBy.get(selectedItem.number)!.map((c) => (
+                          <div key={c.id} className="tl-cycle__item">
+                            <span className="tl-cycle__body">
+                              <b>{c.author}</b> · {c.body}
+                            </span>
+                            {slackOn && (
+                              <DiscussButton
+                                repoId={repoId}
+                                featureNumber={selectedItem.number}
+                                commentId={c.id}
+                                discussion={discussions.get(selectedItem.number)}
+                                onOpened={reloadDiscussions}
+                                onError={(msg, retry) =>
+                                  addToast(`Falha ao abrir a discussão: ${msg}`, {
+                                    label: 'Tentar novamente',
+                                    run: retry,
+                                  })
+                                }
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </>
                 )}
 
