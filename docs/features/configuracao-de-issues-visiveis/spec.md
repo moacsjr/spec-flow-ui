@@ -1,3 +1,5 @@
+# Documento atual
+
 # Visão Geral
 - **Objetivo:** Permitir que o Product Manager personalize a exibição de issues no Workspace através de filtros e pesquisa, facilitando o foco nas atividades mais relevantes do projeto.
 - **Personas:** Product Manager.
@@ -14,6 +16,7 @@
 - Múltiplos filtros podem ser combinados simultaneamente.
 - A lista de issues deve ser atualizada dinamicamente sem recarregar a página.
 - Deve haver uma opção para limpar todos os filtros e retornar à visualização padrão.
+- Deve haver um botão "Ver Todos" que exibe todas as issues, incluindo aquelas com status "Fechado".
 
 # Fluxos
 ## Fluxo Principal (Happy Path)
@@ -27,6 +30,7 @@
 - **Pesquisa por texto:** O usuário digita um termo no campo de pesquisa, e o sistema filtra as issues cujo título contém o termo.
 - **Combinação de filtros:** O usuário aplica filtros múltiplos (ex.: Tipo = "Story" + Status = "Em Progresso"), e o sistema exibe a interseção dos resultados.
 - **Limpar filtros:** O usuário clica em "Limpar Filtros", e o sistema retorna à visualização padrão (todas as issues, exceto "Fechado").
+- **Ver todos:** O usuário clica em "Ver Todos", e o sistema exibe todas as issues, incluindo aquelas com status "Fechado".
 
 ## Cenários de Erro
 - **Sem resultados:** Se nenhuma issue atender aos filtros, o sistema exibe uma mensagem "Nenhuma issue encontrada".
@@ -56,6 +60,11 @@ Cenário: Limpar todos os filtros
   Quando clico em "Limpar Filtros"
   Então a lista exibe todas as issues (exceto "Fechado")
   E os campos de filtro são resetados
+
+Cenário: Botão "Ver Todos"
+  Dado que estou na visão "Backlog" do Workspace
+  Quando clico em "Ver Todos"
+  Então a lista exibe todas as issues, incluindo aquelas com status "Fechado"
 
 Cenário: Feedback visual durante filtragem
   Dado que estou aplicando um filtro
