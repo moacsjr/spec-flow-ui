@@ -27,6 +27,7 @@ import { tenantOpenrouterKey } from './settingsService.ts';
 import { configForRepository, getRepositoryOr404 } from './repositoryService.ts';
 import { setStageForRepository, stageAgesForRepository } from './workItemService.ts';
 import { loadSnapshotForRepository } from './snapshotService.ts';
+import { archiveDiscussionForFeature } from './discussionService.ts';
 
 const FIB = [1, 2, 3, 5, 8, 13, 21];
 const QA_RETURN_MARKER = '<!-- qa-return -->';
@@ -278,6 +279,11 @@ export async function featureDoneCheck(
   );
   await addLabel(config, featureNumber, FEATURE_DONE_LABEL).catch(() => undefined);
   await updateIssueState(config, featureNumber, 'closed');
+  // Discussão integrada: arquiva o canal da Feature no mesmo ato (falha não
+  // bloqueia o fechamento — a rede de segurança do polling rearquiva).
+  await archiveDiscussionForFeature(tenantId, repoId, featureNumber).catch((err: Error) =>
+    logger.warn(`Feature #${featureNumber}: canal de discussão não arquivado: ${err.message}`),
+  );
   invalidateSnapshot(tenantId, repoId);
   return true;
 }

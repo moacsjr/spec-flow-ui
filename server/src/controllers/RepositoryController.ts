@@ -85,7 +85,12 @@ export async function patchRepository(
   }
 
   const body = (req.body ?? {}) as Record<string, unknown>;
-  const input: { url?: string; projectUrl?: string; wipThreshold?: number | null } = {};
+  const input: {
+    url?: string;
+    projectUrl?: string;
+    wipThreshold?: number | null;
+    slackBotToken?: string;
+  } = {};
   if ('url' in body) {
     if (typeof body.url !== 'string' || body.url.trim().length === 0) {
       res.status(400).json({ error: 'A URL do repositório não pode ser vazia.' });
@@ -107,8 +112,20 @@ export async function patchRepository(
     }
     input.wipThreshold = body.wipThreshold as number | null;
   }
-  if (input.url === undefined && input.projectUrl === undefined && input.wipThreshold === undefined) {
-    res.status(400).json({ error: 'Nada para atualizar: informe url, projectUrl e/ou wipThreshold.' });
+  if ('slackBotToken' in body) {
+    if (typeof body.slackBotToken !== 'string') {
+      res.status(400).json({ error: 'slackBotToken deve ser um texto (vazio para remover).' });
+      return;
+    }
+    input.slackBotToken = body.slackBotToken;
+  }
+  if (
+    input.url === undefined &&
+    input.projectUrl === undefined &&
+    input.wipThreshold === undefined &&
+    input.slackBotToken === undefined
+  ) {
+    res.status(400).json({ error: 'Nada para atualizar: informe url, projectUrl, wipThreshold e/ou slackBotToken.' });
     return;
   }
 

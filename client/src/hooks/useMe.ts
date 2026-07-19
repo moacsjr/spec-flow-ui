@@ -45,7 +45,11 @@ export function useMe(): UseMe {
 
   const setLogin = async (login: string | null): Promise<void> => {
     const saved = await saveMyLogin(login);
-    cached = { login: saved, email: cached?.email ?? null };
+    cached = {
+      login: saved,
+      slackUserId: cached?.slackUserId ?? null,
+      email: cached?.email ?? null,
+    };
     broadcast();
   };
 

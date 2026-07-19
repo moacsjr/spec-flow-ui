@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from 'react';
 import { createRepository, fetchRepository, updateRepository } from '../data/repositories';
+import { fetchMe, saveMySlackId } from '../data/workspace';
 import { DASHBOARD_HREF } from '../lib/router';
 
 interface RepositoryFormPageProps {
@@ -24,6 +25,13 @@ export function RepositoryFormPage({ repoId }: RepositoryFormPageProps) {
   const [projectUrl, setProjectUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Discussão integrada (Slack) — só na edição: token write-only por repo +
+  // Slack member ID do usuário (convite automático ao canal).
+  const [slackConfigured, setSlackConfigured] = useState(false);
+  const [slackToken, setSlackToken] = useState('');
+  const [slackRemove, setSlackRemove] = useState(false);
+  const [slackUserId, setSlackUserId] = useState('');
+  const [slackUserIdInitial, setSlackUserIdInitial] = useState('');
 
   // Edição: carrega os valores atuais para pré-preencher.
   useEffect(() => {
@@ -35,6 +43,7 @@ export function RepositoryFormPage({ repoId }: RepositoryFormPageProps) {
         if (controller.signal.aborted) return;
         setUrl(repo.url);
         setProjectUrl(repo.projectUrl ?? '');
+        setSlackConfigured(Boolean(repo.slackConfigured));
         setLoad({ phase: 'ready' });
       })
       .catch((err: unknown) => {
@@ -44,6 +53,17 @@ export function RepositoryFormPage({ repoId }: RepositoryFormPageProps) {
     return () => controller.abort();
   }, [repoId]);
 
+  // Slack member ID do usuário (preferência pessoal, não do repo).
+  useEffect(() => {
+    if (!isEdit) return;
+    fetchMe()
+      .then((me) => {
+        setSlackUserId(me.slackUserId ?? '');
+        setSlackUserIdInitial(me.slackUserId ?? '');
+      })
+      .catch(() => undefined);
+  }, [isEdit]);
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting || url.trim().length === 0) return;
@@ -52,7 +72,19 @@ export function RepositoryFormPage({ repoId }: RepositoryFormPageProps) {
     try {
       if (repoId != null) {
         // projectUrl vazio desvincula o projeto (o backend trata '' como limpar).
-        await updateRepository(repoId, { url: url.trim(), projectUrl: projectUrl.trim() });
+        // slackBotToken só é enviado quando o usuário digitou um novo ou pediu remoção.
+        await updateRepository(repoId, {
+          url: url.trim(),
+          projectUrl: projectUrl.trim(),
+          ...(slackRemove
+            ? { slackBotToken: '' }
+            : slackToken.trim()
+              ? { slackBotToken: slackToken.trim() }
+              : {}),
+        });
+        if (slackUserId.trim() !== slackUserIdInitial) {
+          await saveMySlackId(slackUserId.trim() || null);
+        }
       } else {
         await createRepository({ url: url.trim(), projectUrl: projectUrl.trim() || undefined });
       }
@@ -140,6 +172,63 @@ export function RepositoryFormPage({ repoId }: RepositoryFormPageProps) {
                 {isEdit && ' Deixe em branco para desvincular o projeto.'}
               </span>
             </label>
+
+            {isEdit && (
+              <>
+                <label className="repo-form__field">
+                  <span className="repo-form__label">
+                    Slack — discussão integrada{' '}
+                    <span className="repo-form__optional">
+                      ({slackConfigured ? 'configurado' : 'opcional'})
+                    </span>
+                  </span>
+                  <input
+                    type="password"
+                    className="repo-form__input"
+                    placeholder={
+                      slackConfigured
+                        ? 'configurado — cole um novo bot token para substituir'
+                        : 'xoxb-… (bot token com channels:manage, chat:write, channels:read)'
+                    }
+                    value={slackToken}
+                    onChange={(e) => setSlackToken(e.target.value)}
+                    disabled={slackRemove}
+                    autoComplete="off"
+                  />
+                  <span className="repo-form__hint">
+                    Habilita o botão "Discutir no chat" nos comentários de revisão — um canal por
+                    Feature, criado sob demanda.
+                  </span>
+                  {slackConfigured && (
+                    <span className="repo-form__inlinecheck">
+                      <input
+                        type="checkbox"
+                        checked={slackRemove}
+                        onChange={(e) => setSlackRemove(e.target.checked)}
+                      />{' '}
+                      Remover a integração
+                    </span>
+                  )}
+                </label>
+
+                <label className="repo-form__field">
+                  <span className="repo-form__label">
+                    Seu Slack member ID <span className="repo-form__optional">(opcional)</span>
+                  </span>
+                  <input
+                    type="text"
+                    className="repo-form__input"
+                    placeholder="U0XXXXXXX — perfil → ⋯ → Copy member ID"
+                    value={slackUserId}
+                    onChange={(e) => setSlackUserId(e.target.value)}
+                  />
+                  <span className="repo-form__hint">
+                    Preferência pessoal (vale para todos os repositórios): você é adicionado
+                    automaticamente aos canais que criar. Sem o ID, o canal é criado do mesmo jeito.
+                  </span>
+                </label>
+              </>
+            )}
 
             {error && (
               <p className="edit-error" role="alert">

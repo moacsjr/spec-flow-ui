@@ -407,9 +407,11 @@ export async function fetchProgressSummary(
 // ---- Workspace do Developer ----
 
 // Identidade GitHub da sessão (GET/PUT /api/me). O backend guarda o vínculo
-// usuário Cognito → login do GitHub (não há OAuth de usuário no GitHub App).
+// usuário Cognito → login do GitHub (não há OAuth de usuário no GitHub App) e,
+// opcionalmente, o Slack member ID (convite ao canal de discussão).
 export interface Me {
   login: string | null;
+  slackUserId: string | null;
   email: string | null;
 }
 
@@ -420,6 +422,40 @@ export async function fetchMe(): Promise<Me> {
 export async function saveMyLogin(login: string | null): Promise<string | null> {
   const json = await request('/api/me', { method: 'PUT', payload: { login } });
   return (json as { login: string | null }).login;
+}
+
+export async function saveMySlackId(slackUserId: string | null): Promise<string | null> {
+  const json = await request('/api/me', { method: 'PUT', payload: { slackUserId } });
+  return (json as { slackUserId: string | null }).slackUserId;
+}
+
+// ---- Discussão integrada (canal Slack por Feature) ----
+
+export interface DiscussionInfo {
+  itemNumber: number;
+  channelName: string;
+  channelLink: string;
+}
+
+export async function openDiscussion(
+  repoId: string,
+  featureNumber: number,
+  commentId: number,
+): Promise<{ channelLink: string; created: boolean }> {
+  const json = await request(`${itemBase(repoId, 'feature', featureNumber)}/discussion`, {
+    method: 'POST',
+    payload: { commentId },
+    timeoutMs: 30_000,
+  });
+  return json as { channelLink: string; created: boolean };
+}
+
+export async function fetchDiscussions(repoId: string): Promise<DiscussionInfo[]> {
+  const json = await request(`/api/repositories/${repoId}/discussions`, {
+    method: 'GET',
+    timeoutMs: 30_000,
+  });
+  return (json as { discussions: DiscussionInfo[] }).discussions;
 }
 
 // Start Story (Pending): assignee = usuário da sessão + etapa Development.

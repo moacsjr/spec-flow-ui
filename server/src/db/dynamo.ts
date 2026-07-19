@@ -149,6 +149,9 @@ export interface RepositoryRecord {
   etapaFieldId?: string | null;
   stageOptions?: Record<string, string> | null;
   wipThreshold?: number | null; // WIP pessoal persuasivo do workspace Dev (default 2)
+  // Discussão integrada (Slack): bot token cifrado com KMS (contexto tenantId),
+  // como a chave OpenRouter do tenant. Prefixo "plain:" só em dev local sem KMS.
+  slackTokenCiphertext?: string | null;
 }
 
 const repoKey = (tenantId: string, repoId: string) => ({
@@ -887,6 +890,7 @@ export interface UserPrefRecord {
   tenantId: string;
   sub: string;
   githubLogin: string | null;
+  slackUserId?: string | null; // member ID no Slack (convite ao canal de discussão)
   updatedAt: string; // ISO
 }
 
@@ -909,6 +913,113 @@ export async function getUserPref(
     new GetCommand({ TableName: TABLE, Key: userPrefKey(tenantId, sub) }),
   );
   return (out.Item as UserPrefRecord | undefined) ?? null;
+}
+
+// ---------- Discussão integrada (canais de chat por Feature) ----------
+// Um canal por Feature (spec "Discussão integrada" §2). A unicidade da chave
+// resolve a corrida de criação: o segundo clique simultâneo falha no condition
+// e recebe o canal do primeiro. Citações têm dedupe por comentário.
+
+export interface DiscussionChannelRecord {
+  tenantId: string;
+  repoId: string;
+  itemNumber: number;
+  provider: 'slack';
+  channelId: string;
+  channelName: string;
+  createdBy: string; // sub do usuário criador
+  createdAt: string; // ISO
+  archivedAt: string | null;
+  openingPosted: boolean; // §4.1 passo 3 (retomável)
+  tracePosted: boolean; // §4.1 passo 4 (comentário na issue, uma vez por canal)
+}
+
+const discussionChannelKey = (t: { tenantId: string; repoId: string; itemNumber: number }) => ({
+  PK: `TENANT#${t.tenantId}`,
+  SK: `DISCCHAN#${t.repoId}#${t.itemNumber}`,
+});
+
+// Grava o mapeamento SOMENTE se ainda não existe. false = perdeu a corrida.
+export async function putDiscussionChannelIfAbsent(
+  rec: DiscussionChannelRecord,
+): Promise<boolean> {
+  try {
+    await doc().send(
+      new PutCommand({
+        TableName: TABLE,
+        Item: { ...discussionChannelKey(rec), ...rec },
+        ConditionExpression: 'attribute_not_exists(SK)',
+      }),
+    );
+    return true;
+  } catch (err) {
+    if ((err as { name?: string }).name === 'ConditionalCheckFailedException') return false;
+    throw err;
+  }
+}
+
+export async function putDiscussionChannel(rec: DiscussionChannelRecord): Promise<void> {
+  await doc().send(
+    new PutCommand({ TableName: TABLE, Item: { ...discussionChannelKey(rec), ...rec } }),
+  );
+}
+
+export async function getDiscussionChannel(
+  tenantId: string,
+  repoId: string,
+  itemNumber: number,
+): Promise<DiscussionChannelRecord | null> {
+  const out = await doc().send(
+    new GetCommand({ TableName: TABLE, Key: discussionChannelKey({ tenantId, repoId, itemNumber }) }),
+  );
+  return (out.Item as DiscussionChannelRecord | undefined) ?? null;
+}
+
+export async function queryDiscussionChannels(
+  tenantId: string,
+  repoId: string,
+): Promise<DiscussionChannelRecord[]> {
+  const res = await doc().send(
+    new QueryCommand({
+      TableName: TABLE,
+      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+      ExpressionAttributeValues: {
+        ':pk': `TENANT#${tenantId}`,
+        ':sk': `DISCCHAN#${repoId}#`,
+      },
+    }),
+  );
+  return (res.Items ?? []) as DiscussionChannelRecord[];
+}
+
+export interface DiscussionCitationRecord {
+  tenantId: string;
+  channelId: string;
+  commentId: number;
+  postedAt: string; // ISO
+}
+
+// Dedupe de citação: true = primeira vez (pode postar); false = já citado.
+export async function putDiscussionCitationIfAbsent(
+  rec: DiscussionCitationRecord,
+): Promise<boolean> {
+  try {
+    await doc().send(
+      new PutCommand({
+        TableName: TABLE,
+        Item: {
+          PK: `TENANT#${rec.tenantId}`,
+          SK: `DISCCITE#${rec.channelId}#${rec.commentId}`,
+          ...rec,
+        },
+        ConditionExpression: 'attribute_not_exists(SK)',
+      }),
+    );
+    return true;
+  } catch (err) {
+    if ((err as { name?: string }).name === 'ConditionalCheckFailedException') return false;
+    throw err;
+  }
 }
 
 // ---------- Convites (fase 3) ----------

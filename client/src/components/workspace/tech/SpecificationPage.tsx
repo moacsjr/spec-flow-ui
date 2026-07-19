@@ -12,6 +12,7 @@ import type { WorkspacePageProps } from '../types';
 import { Mdx } from '../../Mdx';
 import { DiffPanel } from '../DiffPanel';
 import { ToastStack, useToasts } from '../Toasts';
+import { DiscussButton, DiscussionDot, useDiscussions } from '../discussion';
 import { isFeature, isOpen, waitingSince } from '../../../lib/workspaceSelectors';
 import { createArtifact } from '../../../data/workItem';
 import {
@@ -90,6 +91,8 @@ export function SpecificationPage({ repoId, snapshot, refresh }: WorkspacePagePr
   const { toasts, addToast, dismissToast } = useToasts();
   const docRef = useRef<HTMLDivElement>(null);
   const blobCache = useRef<Map<string, string>>(new Map());
+  const slackOn = Boolean(snapshot.repository.slackConfigured);
+  const { discussions, reloadDiscussions } = useDiscussions(repoId, slackOn, snapshot.generatedAt);
 
   // ---- fila ----
   const scoped = useMemo(
@@ -466,6 +469,7 @@ export function SpecificationPage({ repoId, snapshot, refresh }: WorkspacePagePr
                     >
                       <span className="sp-queue__title">
                         <span className="mono">#{item.number}</span> {item.title}
+                        <DiscussionDot discussion={discussions.get(item.number)} />
                       </span>
                       <span className="sp-queue__status">
                         {s === 'returned' && 'Retornou de devolução'}
@@ -566,6 +570,21 @@ export function SpecificationPage({ repoId, snapshot, refresh }: WorkspacePagePr
                               {triageLabel[c.state]}
                             </span>
                             <span className="tl-cycle__body">{c.body}</span>
+                            {slackOn && (
+                              <DiscussButton
+                                repoId={repoId}
+                                featureNumber={selectedItem.number}
+                                commentId={c.id}
+                                discussion={discussions.get(selectedItem.number)}
+                                onOpened={reloadDiscussions}
+                                onError={(msg, retry) =>
+                                  addToast(`Falha ao abrir a discussão: ${msg}`, {
+                                    label: 'Tentar novamente',
+                                    run: retry,
+                                  })
+                                }
+                              />
+                            )}
                           </div>
                         ))}
                       </div>

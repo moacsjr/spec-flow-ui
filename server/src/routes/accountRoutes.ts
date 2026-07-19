@@ -29,35 +29,66 @@ function handleError(err: unknown, res: Response, next: NextFunction): void {
 // GitHub é via installation token do App (não há OAuth de usuário), então o
 // login não é descoberto automaticamente — o dev escolhe o seu na primeira vez.
 
-// GET /api/me → { login, email }
+// GET /api/me → { login, slackUserId, email }
 accountRoutes.get('/me', (req: Request, res: Response, next: NextFunction) => {
   const tenant = tenantOf(req);
   getUserPref(tenant.tenantId, tenant.sub)
-    .then((pref) => res.json({ login: pref?.githubLogin ?? null, email: tenant.email ?? null }))
+    .then((pref) =>
+      res.json({
+        login: pref?.githubLogin ?? null,
+        slackUserId: pref?.slackUserId ?? null,
+        email: tenant.email ?? null,
+      }),
+    )
     .catch((err) => handleError(err, res, next));
 });
 
-// PUT /api/me { login } → grava o login do GitHub do usuário ('' ou null limpa).
+// PUT /api/me { login?, slackUserId? } → grava as preferências do usuário
+// ('' ou null limpa; campo omitido é mantido).
 accountRoutes.put('/me', (req: Request, res: Response, next: NextFunction) => {
   const tenant = tenantOf(req);
   const body = (req.body ?? {}) as Record<string, unknown>;
-  const raw = body.login;
-  if (raw !== null && typeof raw !== 'string') {
-    res.status(400).json({ error: 'login deve ser um texto (vazio para limpar).' });
+
+  const readField = (raw: unknown, label: string): string | null | undefined => {
+    if (raw === undefined) return undefined;
+    if (raw !== null && typeof raw !== 'string') {
+      res.status(400).json({ error: `${label} deve ser um texto (vazio para limpar).` });
+      return undefined;
+    }
+    const v = typeof raw === 'string' ? raw.trim() : '';
+    return v || null;
+  };
+
+  const login = readField(body.login, 'login');
+  if (res.headersSent) return;
+  const slackUserId = readField(body.slackUserId, 'slackUserId');
+  if (res.headersSent) return;
+  if (login === undefined && slackUserId === undefined) {
+    res.status(400).json({ error: 'Informe login e/ou slackUserId.' });
     return;
   }
-  const login = typeof raw === 'string' ? raw.trim() : '';
   if (login && !/^[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}$/.test(login)) {
     res.status(400).json({ error: `Login do GitHub inválido: "${login}".` });
     return;
   }
-  putUserPref({
-    tenantId: tenant.tenantId,
-    sub: tenant.sub,
-    githubLogin: login || null,
-    updatedAt: new Date().toISOString(),
-  })
-    .then(() => res.json({ login: login || null }))
+  if (slackUserId && !/^[UW][A-Z0-9]{2,20}$/.test(slackUserId)) {
+    res.status(400).json({ error: `Slack member ID inválido: "${slackUserId}" (formato U0XXXXXXX).` });
+    return;
+  }
+
+  getUserPref(tenant.tenantId, tenant.sub)
+    .then((prev) => {
+      const next = {
+        tenantId: tenant.tenantId,
+        sub: tenant.sub,
+        githubLogin: login === undefined ? (prev?.githubLogin ?? null) : login,
+        slackUserId: slackUserId === undefined ? (prev?.slackUserId ?? null) : slackUserId,
+        updatedAt: new Date().toISOString(),
+      };
+      return putUserPref(next).then(() =>
+        res.json({ login: next.githubLogin, slackUserId: next.slackUserId }),
+      );
+    })
     .catch((err) => handleError(err, res, next));
 });
 
