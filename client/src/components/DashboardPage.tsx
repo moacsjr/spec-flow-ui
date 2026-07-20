@@ -2,9 +2,11 @@
 // conectados em grid responsivo (1 coluna no mobile, 3 no desktop), com busca
 // client-side por nome e os estados de loading / vazio / erro.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRepositories } from '../hooks/useRepositories';
+import { useMe } from '../hooks/useMe';
 import { RepositoryCard } from './RepositoryCard';
+import { ToastStack, useToasts } from './workspace/Toasts';
 import { startGitHubAppInstall } from '../data/github';
 import { hrefForWorkspace } from '../lib/router';
 import { lastWorkspaceRole } from '../state/WorkspaceContext';
@@ -23,14 +25,18 @@ function RepoGridSkeleton() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ isRoot }: { isRoot: boolean }) {
   return (
     <div className="repo-empty">
       <div className="repo-empty__art" aria-hidden="true">📭</div>
       <p className="repo-empty__title">Nenhum repositório encontrado</p>
-      <a className="btn btn--accent" href={CONNECT_HREF}>
-        Adicionar repositório
-      </a>
+      {isRoot ? (
+        <a className="btn btn--accent" href={CONNECT_HREF}>
+          Adicionar repositório
+        </a>
+      ) : (
+        <p>Peça a um administrador para conectar um repositório ou atribuir seus papéis.</p>
+      )}
     </div>
   );
 }
@@ -49,7 +55,25 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
 
 export function DashboardPage() {
   const { state, retry } = useRepositories();
+  const { me } = useMe();
   const [query, setQuery] = useState('');
+  const { toasts, addToast, dismissToast } = useToasts();
+  const warnedLogin = useRef(false);
+  // Gestão de repositórios/GitHub App é administração — só o root (owner) vê.
+  const isRoot = me?.isRoot ?? false;
+
+  // Sem login do GitHub vinculado → alerta com a instrução de configuração
+  // (uma vez por visita ao dashboard).
+  useEffect(() => {
+    if (me && !me.login && !warnedLogin.current) {
+      warnedLogin.current = true;
+      addToast(
+        'Você ainda não vinculou o seu login do GitHub — configure-o para que os workspaces reconheçam seus itens e PRs.',
+        { label: 'Configurar', run: () => window.location.assign('#/settings') },
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me]);
 
   const repositories = state.phase === 'ready' ? state.repositories : [];
 
@@ -76,18 +100,22 @@ export function DashboardPage() {
           <a className="btn" href="#/settings">
             Configurações
           </a>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              startGitHubAppInstall().catch((err: Error) => alert(err.message));
-            }}
-          >
-            Instalar GitHub App
-          </button>
-          <a className="btn btn--accent" href={CONNECT_HREF}>
-            Conectar novo repositório
-          </a>
+          {isRoot && (
+            <>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  startGitHubAppInstall().catch((err: Error) => alert(err.message));
+                }}
+              >
+                Instalar GitHub App
+              </button>
+              <a className="btn btn--accent" href={CONNECT_HREF}>
+                Conectar novo repositório
+              </a>
+            </>
+          )}
         </div>
       </header>
 
@@ -112,7 +140,7 @@ export function DashboardPage() {
 
         {state.phase === 'ready' &&
           (repositories.length === 0 ? (
-            <EmptyState />
+            <EmptyState isRoot={isRoot} />
           ) : filtered.length === 0 ? (
             <div className="repo-empty">
               <p className="repo-empty__title">Nenhum repositório corresponde a “{query}”.</p>
@@ -125,6 +153,8 @@ export function DashboardPage() {
             </div>
           ))}
       </main>
+
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </>
   );
 }

@@ -17,8 +17,78 @@ import {
   type TeamMember,
 } from '../data/account';
 import { fetchRepositories } from '../data/repositories';
+import { saveMySlackId } from '../data/workspace';
+import { useMe } from '../hooks/useMe';
 import type { Repository } from '@spec-flow/shared';
 import { logout } from '../auth/cognito';
+
+// Identidade do usuário (disponível para TODOS os papéis): o vínculo com o
+// login do GitHub — usado pelo workspace Developer ("meu"), pelo Start Story
+// (assignee) e pela autoria ("por @login") — e o Slack member ID opcional
+// (convite automático aos canais de discussão).
+function MyAccount() {
+  const { me, setLogin } = useMe();
+  const [login, setLoginDraft] = useState('');
+  const [slackId, setSlackId] = useState('');
+  const [seeded, setSeeded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (me && !seeded) {
+      setLoginDraft(me.login ?? '');
+      setSlackId(me.slackUserId ?? '');
+      setSeeded(true);
+    }
+  }, [me, seeded]);
+
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setMsg(null);
+    setErr(null);
+    const ops: Promise<unknown>[] = [setLogin(login.trim() || null)];
+    if ((me?.slackUserId ?? '') !== slackId.trim()) {
+      ops.push(saveMySlackId(slackId.trim() || null));
+    }
+    Promise.all(ops)
+      .then(() => setMsg('Identidade salva.'))
+      .catch((e2: Error) => setErr(e2.message))
+      .finally(() => setSaving(false));
+  };
+
+  return (
+    <section style={{ marginTop: 24 }}>
+      <h2>Minha conta</h2>
+      <p>
+        Conectado como <strong>{me?.email ?? '…'}</strong>. Vincule o seu login do GitHub — é ele
+        que identifica os seus itens e PRs nos workspaces e permite puxar trabalho.
+      </p>
+      {err && <p role="alert" style={{ color: 'var(--danger, #c00)' }}>{err}</p>}
+      {msg && <p role="status">{msg}</p>}
+      <form onSubmit={save} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input
+          type="text"
+          placeholder="login do GitHub (ex.: octocat)"
+          aria-label="Login do GitHub"
+          value={login}
+          onChange={(e) => setLoginDraft(e.target.value)}
+        />
+        <input
+          type="text"
+          placeholder="Slack member ID (opcional, U0XXXXXXX)"
+          aria-label="Slack member ID"
+          value={slackId}
+          onChange={(e) => setSlackId(e.target.value)}
+        />
+        <button type="submit" className="btn btn--accent" disabled={saving}>
+          {saving ? 'Salvando…' : 'Salvar'}
+        </button>
+      </form>
+    </section>
+  );
+}
 
 const WORK_ROLES = ['pm', 'tech', 'dev'] as const;
 const ROLE_SHORT: Record<string, string> = { pm: 'PM', tech: 'Tech', dev: 'Dev' };
@@ -166,6 +236,8 @@ export function SettingsPage() {
 
         {error && <p role="alert" style={{ color: 'var(--danger, #c00)' }}>{error}</p>}
         {notice && <p role="status">{notice}</p>}
+
+        <MyAccount />
 
         <section style={{ marginTop: 24 }}>
           <h2>Plano e uso</h2>
