@@ -307,11 +307,12 @@ export async function getIdToken(): Promise<string | null> {
   }
 }
 
-// Remove os tokens da sessão do armazenamento local do client. Idempotente:
-// pode ser chamado várias vezes com segurança (usado no fluxo de logout do menu
-// para garantir estado local limpo mesmo quando a revogação server-side falha).
+// Remove os tokens da sessão do armazenamento local do client (ambos os
+// storages — "manter conectado" grava em localStorage). Idempotente: pode ser
+// chamado várias vezes com segurança (usado no fluxo de logout do menu para
+// garantir estado local limpo mesmo quando a revogação server-side falha).
 export function clearLocalSession(): void {
-  sessionStorage.removeItem(STORAGE_KEY);
+  clearTokens();
 }
 
 // Revoga o refresh token no Cognito (invalidação server-side da sessão). Lança
@@ -319,12 +320,12 @@ export function clearLocalSession(): void {
 // usuário. No dev (auth desabilitada) ou sem refresh token é um no-op resolvido.
 export async function revokeSession(): Promise<void> {
   if (!authEnabled) return;
-  const tokens = loadTokens();
-  if (!tokens?.refreshToken) return;
+  const refreshToken = loadTokens()?.tokens.refreshToken;
+  if (!refreshToken) return;
   const res = await fetch(`${DOMAIN}/oauth2/revoke`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ client_id: CLIENT_ID, token: tokens.refreshToken }),
+    body: new URLSearchParams({ client_id: CLIENT_ID, token: refreshToken }),
   });
   if (!res.ok) {
     throw new Error(`Falha ao revogar a sessão no Cognito (HTTP ${res.status})`);
