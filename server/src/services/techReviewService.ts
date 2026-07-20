@@ -34,6 +34,7 @@ import {
 import { generateText } from '../llm/openrouter.ts';
 import { logger } from '../lib/logger.ts';
 import { HttpError } from '../lib/errors.ts';
+import { actorLogin } from '../lib/actor.ts';
 import { invalidateSnapshot } from '../lib/snapshotCache.ts';
 import { consumeRefineOrThrow } from './quotaService.ts';
 import { tenantOpenrouterKey } from './settingsService.ts';
@@ -140,12 +141,18 @@ export async function returnToPm(
 
   const commentIds: number[] = [];
   let posted = 0;
+  // Autoria (spec Gestão de usuários §7): o marcador leva `author` e o corpo
+  // registra "por @login" — a autoria visível no GitHub é a do App.
+  const author = await actorLogin(tenantId);
   for (const draft of drafts) {
     try {
-      const marker = draft.anchor
-        ? `<!-- spec-review ${JSON.stringify(draft.anchor)} -->`
-        : '<!-- spec-review -->';
-      const id = await createComment(config, number, `${marker}\n\n${draft.body}`);
+      const anchorJson =
+        draft.anchor || author
+          ? JSON.stringify({ ...((draft.anchor as object | null) ?? {}), ...(author ? { author } : {}) })
+          : null;
+      const marker = anchorJson ? `<!-- spec-review ${anchorJson} -->` : '<!-- spec-review -->';
+      const body = author ? `${draft.body}\n\n— por @${author}` : draft.body;
+      const id = await createComment(config, number, `${marker}\n\n${body}`);
       commentIds.push(id);
       posted += 1;
       await deleteReviewDraft(tenantId, repoId, number, draft.draftId);

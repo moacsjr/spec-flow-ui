@@ -76,7 +76,7 @@ export function tenantContext(req: Request, res: Response, next: NextFunction): 
   // default (seria bypass silencioso do isolamento IAM) — vira 500.
   tenantScopedDocClient(tenantId)
     .then((doc) => {
-      requestContext.run({ tenantId, requestId, doc }, () => next());
+      requestContext.run({ tenantId, requestId, sub, doc }, () => next());
     })
     .catch((err) => {
       logger.error(`Falha ao obter credenciais do tenant ${tenantId}: ${(err as Error).message}`);

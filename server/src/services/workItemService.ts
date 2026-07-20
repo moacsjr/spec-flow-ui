@@ -44,6 +44,7 @@ import { logger } from '../lib/logger.ts';
 import { HttpError } from '../lib/errors.ts';
 import { normalizeStage } from '../lib/status.ts';
 import { invalidateSnapshot } from '../lib/snapshotCache.ts';
+import { requestContext } from '../lib/requestContext.ts';
 import { loadSnapshotForRepository } from './snapshotService.ts';
 import {
   putStageEntry,
@@ -748,8 +749,10 @@ export async function setStageForRepository(
   await moveProjectStage(config, project.projectId, itemId, project.etapaFieldId, option[1]);
 
   // Registra a ENTRADA na etapa (tempo-na-etapa das telas do PM) e a ÚLTIMA
-  // transição do item (supressão da automação do workspace Dev). Best-effort.
+  // transição do item (supressão da automação do workspace Dev), com o autor
+  // real da sessão (null quando origin=automation). Best-effort.
   const at = new Date().toISOString();
+  const sub = origin === 'automation' ? null : (requestContext.getStore()?.sub ?? null);
   try {
     await putStageEntry({
       tenantId,
@@ -759,8 +762,9 @@ export async function setStageForRepository(
       at,
       approximate: false,
       origin,
+      sub,
     });
-    await putStageLast({ tenantId, repoId: id, issueNumber: number, stage, at, origin });
+    await putStageLast({ tenantId, repoId: id, issueNumber: number, stage, at, origin, sub });
   } catch (err) {
     logger.warn(`Issue #${number}: etapa movida, mas falhou o registro de transição: ${(err as Error).message}`);
   }

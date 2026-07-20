@@ -32,6 +32,7 @@ export function RepositoryFormPage({ repoId }: RepositoryFormPageProps) {
   const [slackRemove, setSlackRemove] = useState(false);
   const [slackUserId, setSlackUserId] = useState('');
   const [slackUserIdInitial, setSlackUserIdInitial] = useState('');
+  const [wip, setWip] = useState(''); // WIP pessoal do dev (vazio = default 2)
 
   // Edição: carrega os valores atuais para pré-preencher.
   useEffect(() => {
@@ -44,6 +45,7 @@ export function RepositoryFormPage({ repoId }: RepositoryFormPageProps) {
         setUrl(repo.url);
         setProjectUrl(repo.projectUrl ?? '');
         setSlackConfigured(Boolean(repo.slackConfigured));
+        setWip(repo.wipThreshold != null ? String(repo.wipThreshold) : '');
         setLoad({ phase: 'ready' });
       })
       .catch((err: unknown) => {
@@ -76,6 +78,7 @@ export function RepositoryFormPage({ repoId }: RepositoryFormPageProps) {
         await updateRepository(repoId, {
           url: url.trim(),
           projectUrl: projectUrl.trim(),
+          wipThreshold: wip.trim() ? Number(wip) : null,
           ...(slackRemove
             ? { slackBotToken: '' }
             : slackToken.trim()
@@ -175,6 +178,24 @@ export function RepositoryFormPage({ repoId }: RepositoryFormPageProps) {
 
             {isEdit && (
               <>
+                <label className="repo-form__field">
+                  <span className="repo-form__label">
+                    WIP pessoal do Developer <span className="repo-form__optional">(opcional)</span>
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    className="repo-form__input"
+                    placeholder="2 (default)"
+                    value={wip}
+                    onChange={(e) => setWip(e.target.value)}
+                  />
+                  <span className="repo-form__hint">
+                    Itens em andamento por dev a partir dos quais o Start pede confirmação leve
+                    (nunca bloqueia). Vazio = default 2.
+                  </span>
+                </label>
+
                 <label className="repo-form__field">
                   <span className="repo-form__label">
                     Slack — discussão integrada{' '}

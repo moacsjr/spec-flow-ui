@@ -2,6 +2,7 @@
 
 import { Router } from 'express';
 import { requireOwner } from '../middleware/auth.ts';
+import { repoAccessParamGuard } from '../middleware/authorize.ts';
 import {
   getAllRepositories,
   getRepositoryById,
@@ -93,6 +94,12 @@ import {
 } from '../controllers/SpecReviewController.ts';
 
 export const repositoryRoutes = Router();
+
+// Autorização por papel (spec Gestão de usuários §4): um guard único por :id —
+// leitura exige algum papel no repositório (ou owner); escrita exige o papel
+// da spec da tela (tabela em middleware/authorize.ts). Desligado com
+// AUTH_ENFORCED=false (modo de transição).
+repositoryRoutes.param('id', repoAccessParamGuard);
 
 // GET /api/repositories → lista todos os repositórios conectados.
 repositoryRoutes.get('/repositories', (req, res, next) => {

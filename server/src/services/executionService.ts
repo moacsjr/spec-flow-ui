@@ -21,6 +21,7 @@ import { getUserPref, queryStageEntries } from '../db/dynamo.ts';
 import { generateText } from '../llm/openrouter.ts';
 import { HttpError } from '../lib/errors.ts';
 import { logger } from '../lib/logger.ts';
+import { actorLogin } from '../lib/actor.ts';
 import { invalidateSnapshot } from '../lib/snapshotCache.ts';
 import { consumeRefineOrThrow } from './quotaService.ts';
 import { tenantOpenrouterKey } from './settingsService.ts';
@@ -117,6 +118,9 @@ export async function setTaskStateForRepository(
 // antigo e não conta.
 const QA_RETURN_TOLERANCE_MS = 10 * 60_000;
 
+// Os marcadores podem carregar autoria: `<!-- qa-return {"author":"x"} -->`.
+const RETURN_MARKER_RE = /<!--\s*(qa|uat)-return(\s+\{[\s\S]*?\})?\s*-->/;
+
 export async function qaReturnInfoForRepository(
   tenantId: string,
   repoId: string,
@@ -124,9 +128,7 @@ export async function qaReturnInfoForRepository(
 ): Promise<{ reason: string; at: string; origin: 'qa' | 'uat' } | null> {
   const config = await configFor(tenantId, repoId);
   const comments = await fetchIssueCommentsFull(config, number);
-  const returns = comments.filter(
-    (c) => c.body.includes(QA_RETURN_MARKER) || c.body.includes(UAT_RETURN_MARKER),
-  );
+  const returns = comments.filter((c) => RETURN_MARKER_RE.test(c.body));
   const last = returns[returns.length - 1];
   if (!last) return null;
 
@@ -139,11 +141,10 @@ export async function qaReturnInfoForRepository(
     return null; // retorno de um ciclo anterior — o item já saiu e voltou depois
   }
 
-  const origin: 'qa' | 'uat' = last.body.includes(UAT_RETURN_MARKER) ? 'uat' : 'qa';
+  const origin: 'qa' | 'uat' = last.body.match(RETURN_MARKER_RE)?.[1] === 'uat' ? 'uat' : 'qa';
   const reason = last.body
-    .replace(QA_RETURN_MARKER, '')
-    .replace(UAT_RETURN_MARKER, '')
-    .replace(/\*\*Retorno (de QA|da Homologação):\*\*/, '')
+    .replace(RETURN_MARKER_RE, '')
+    .replace(/\*\*Retorno (de QA|da Homologação)[^:]*:\*\*/, '')
     .trim();
   return { reason, at: last.createdAt, origin };
 }
@@ -193,8 +194,15 @@ async function returnToDevelopment(
   origin: 'qa' | 'uat',
 ): Promise<{ bugNumber: number | null }> {
   const config = await configFor(tenantId, repoId);
-  const marker = origin === 'qa' ? QA_RETURN_MARKER : UAT_RETURN_MARKER;
-  const prefix = origin === 'qa' ? '**Retorno de QA:**' : '**Retorno da Homologação:**';
+  // Autoria (spec Gestão de usuários §7): "por @login" no corpo + author no marcador.
+  const author = await actorLogin(tenantId);
+  const marker = author
+    ? `<!-- ${origin}-return ${JSON.stringify({ author })} -->`
+    : origin === 'qa'
+      ? QA_RETURN_MARKER
+      : UAT_RETURN_MARKER;
+  const by = author ? ` (por @${author})` : '';
+  const prefix = origin === 'qa' ? `**Retorno de QA${by}:**` : `**Retorno da Homologação${by}:**`;
   await createComment(config, number, `${marker}\n\n${prefix} ${reason}`);
   await setStageForRepository(tenantId, repoId, number, 'Development');
 

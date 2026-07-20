@@ -6,14 +6,95 @@ import { DASHBOARD_HREF } from '../lib/router';
 import {
   createInvite,
   fetchBilling,
+  fetchRoles,
   fetchTeam,
   openBilling,
+  putRoles,
   saveOpenrouterKey,
   type BillingSummary,
+  type RoleMember,
   type TeamInvite,
   type TeamMember,
 } from '../data/account';
+import { fetchRepositories } from '../data/repositories';
+import type { Repository } from '@spec-flow/shared';
 import { logout } from '../auth/cognito';
+
+const WORK_ROLES = ['pm', 'tech', 'dev'] as const;
+const ROLE_SHORT: Record<string, string> = { pm: 'PM', tech: 'Tech', dev: 'Dev' };
+
+// Matriz de papéis (spec "Gestão de usuários e perfis de acesso" §5.2):
+// checkboxes PM/Tech/Dev por membro × repositório, mutação imediata otimista.
+// Revogação derruba o acesso do membro no próximo refresh do snapshot.
+function RolesMatrix() {
+  const [members, setMembers] = useState<RoleMember[]>([]);
+  const [repos, setRepos] = useState<Repository[]>([]);
+  const [matrix, setMatrix] = useState<Map<string, string[]>>(new Map()); // "sub|repoId" → roles
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    Promise.all([fetchRoles(), fetchRepositories()])
+      .then(([r, reps]) => {
+        setMembers(r.members);
+        setRepos(reps);
+        setMatrix(new Map(r.assignments.map((a) => [`${a.sub}|${a.repoId}`, a.roles])));
+      })
+      .catch((err: Error) => setError(err.message));
+  }, []);
+
+  const toggle = (sub: string, repoId: string, role: string) => {
+    const key = `${sub}|${repoId}`;
+    const current = matrix.get(key) ?? [];
+    const next = current.includes(role) ? current.filter((r) => r !== role) : [...current, role];
+    const prev = current;
+    setMatrix((m) => new Map(m).set(key, next)); // otimista
+    setError(null);
+    putRoles(sub, repoId, next)
+      .then(({ warning }) => setNotice(warning))
+      .catch((err: Error) => {
+        setMatrix((m) => new Map(m).set(key, prev)); // rollback
+        setError(err.message);
+      });
+  };
+
+  return (
+    <section style={{ marginTop: 24 }}>
+      <h2>Papéis de acesso</h2>
+      <p>
+        Papéis de trabalho por repositório (PM · Tech Leader · Developer). Quem não tem papel num
+        repositório não o vê; com qualquer papel, lê todos os workspaces e escreve só no seu.
+      </p>
+      {error && <p role="alert" style={{ color: 'var(--danger, #c00)' }}>{error}</p>}
+      {notice && <p role="status">⚠️ {notice}</p>}
+      {members.map((m) => (
+        <div key={m.sub} style={{ marginBottom: 12 }}>
+          <strong>{m.email}</strong>{' '}
+          {m.githubLogin ? <code>@{m.githubLogin}</code> : <em>(sem vínculo GitHub)</em>}
+          {m.role === 'owner' && ' · root'}
+          <ul style={{ margin: '4px 0 0 16px' }}>
+            {repos.map((repo) => (
+              <li key={repo.id}>
+                {repo.name}:{' '}
+                {WORK_ROLES.map((role) => (
+                  <label key={role} style={{ marginRight: 10 }}>
+                    <input
+                      type="checkbox"
+                      checked={(matrix.get(`${m.sub}|${repo.id}`) ?? []).includes(role)}
+                      onChange={() => toggle(m.sub, repo.id, role)}
+                    />{' '}
+                    {ROLE_SHORT[role]}
+                  </label>
+                ))}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      {members.length === 0 && !error && <div className="skeleton skeleton-card" />}
+    </section>
+  );
+}
 
 export function SettingsPage() {
   const [billing, setBilling] = useState<BillingSummary | null>(null);
@@ -160,6 +241,8 @@ export function SettingsPage() {
             </p>
           )}
         </section>
+
+        {isOwner && <RolesMatrix />}
 
         {isOwner && (
           <section style={{ marginTop: 24 }}>

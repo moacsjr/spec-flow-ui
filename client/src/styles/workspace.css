@@ -3552,3 +3552,19 @@ input.tl-task__title {
   margin-top: 6px;
   cursor: pointer;
 }
+
+/* ===== Gestão de usuários e perfis de acesso ===== */
+.ws-authbanner {
+  padding: 6px 16px;
+  font-size: 12px;
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+}
+.ws-topbar__rolefixed {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  padding: 6px 10px;
+  white-space: nowrap;
+}

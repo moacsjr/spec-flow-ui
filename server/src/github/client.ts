@@ -825,6 +825,21 @@ export async function setIssueAssignees(
   if (!res.ok) throw new UpstreamError(`GitHub Issues API ${res.status}: ${await res.text()}`);
 }
 
+// O login é collaborator do repositório? (aviso não bloqueante ao conceder o
+// papel Dev — não-collaborator não pode ser assignee de issues.)
+export async function isRepoCollaborator(
+  config: GitHubConfig,
+  username: string,
+): Promise<boolean> {
+  const url = `https://api.github.com/repos/${config.owner}/${config.repo}/collaborators/${username}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `bearer ${config.token}`, Accept: 'application/vnd.github+json' },
+  });
+  if (res.status === 204) return true;
+  if (res.status === 404) return false;
+  throw new UpstreamError(`GitHub Collaborators API ${res.status}: ${await res.text()}`);
+}
+
 export async function updateIssueState(
   config: GitHubConfig,
   number: number,

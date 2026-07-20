@@ -9,6 +9,7 @@ import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 export interface RequestStore {
   tenantId: string;
   requestId: string;
+  sub?: string; // usuário da sessão (autoria de transições/comentários)
   doc?: DynamoDBDocumentClient; // client tenant-scoped (ausente = client default)
 }
 

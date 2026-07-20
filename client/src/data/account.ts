@@ -74,3 +74,37 @@ export async function saveOpenrouterKey(key: string): Promise<void> {
   });
   await jsonOrThrow(res, 'Falha ao salvar a chave');
 }
+
+// ---- Papéis de acesso (administração — owner/root) ----
+
+export interface RoleMember {
+  sub: string;
+  email: string;
+  role: string; // owner | member (billing)
+  githubLogin: string | null;
+}
+
+export interface RoleAssignment {
+  sub: string;
+  repoId: string;
+  roles: string[]; // pm | tech | dev
+}
+
+export async function fetchRoles(): Promise<{ members: RoleMember[]; assignments: RoleAssignment[] }> {
+  return jsonOrThrow(await apiFetch('/api/roles'), 'Falha ao carregar os papéis');
+}
+
+export async function putRoles(
+  sub: string,
+  repoId: string,
+  roles: string[],
+): Promise<{ warning: string | null }> {
+  return jsonOrThrow(
+    await apiFetch(`/api/roles/${encodeURIComponent(sub)}/${encodeURIComponent(repoId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roles }),
+    }),
+    'Falha ao gravar os papéis',
+  );
+}

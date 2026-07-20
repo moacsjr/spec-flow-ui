@@ -712,6 +712,7 @@ export interface StageEntryRecord {
   at: string; // ISO — momento da entrada na etapa
   approximate: boolean;
   origin?: StageOrigin;
+  sub?: string | null; // autor da transição (null em origin: automation)
 }
 
 const stageEntryKey = (t: {
@@ -760,6 +761,7 @@ export interface StageLastRecord {
   stage: string; // StageName canônico da última transição
   at: string; // ISO
   origin: StageOrigin;
+  sub?: string | null; // autor (null em origin: automation)
 }
 
 const stageLastKey = (t: { tenantId: string; repoId: string; issueNumber: number }) => ({
@@ -913,6 +915,91 @@ export async function getUserPref(
     new GetCommand({ TableName: TABLE, Key: userPrefKey(tenantId, sub) }),
   );
   return (out.Item as UserPrefRecord | undefined) ?? null;
+}
+
+// ---------- Papéis de acesso (usuário × repositório) ----------
+// Papéis de TRABALHO (pm/tech/dev) por membro e repositório — a materialização
+// das validações "papel X (UI + backend)" das specs. O root (= owner do tenant)
+// administra; múltiplos papéis por repositório são comuns (TL que desenvolve).
+
+export interface MemberRolesRecord {
+  tenantId: string;
+  sub: string;
+  repoId: string;
+  roles: string[]; // 'pm' | 'tech' | 'dev'
+  updatedAt: string; // ISO
+  updatedBy: string; // sub de quem concedeu
+}
+
+const memberRolesKey = (tenantId: string, sub: string, repoId: string) => ({
+  PK: `TENANT#${tenantId}`,
+  SK: `MEMBERROLE#${sub}#${repoId}`,
+});
+
+export async function putMemberRoles(rec: MemberRolesRecord): Promise<void> {
+  if (rec.roles.length === 0) {
+    await doc().send(
+      new DeleteCommand({ TableName: TABLE, Key: memberRolesKey(rec.tenantId, rec.sub, rec.repoId) }),
+    );
+    return;
+  }
+  await doc().send(
+    new PutCommand({
+      TableName: TABLE,
+      Item: { ...memberRolesKey(rec.tenantId, rec.sub, rec.repoId), ...rec },
+    }),
+  );
+}
+
+export async function getMemberRoles(
+  tenantId: string,
+  sub: string,
+  repoId: string,
+): Promise<MemberRolesRecord | null> {
+  const out = await doc().send(
+    new GetCommand({ TableName: TABLE, Key: memberRolesKey(tenantId, sub, repoId) }),
+  );
+  return (out.Item as MemberRolesRecord | undefined) ?? null;
+}
+
+// Todas as atribuições do tenant (matriz do admin) ou de um membro (/api/me).
+export async function queryMemberRoles(
+  tenantId: string,
+  sub?: string,
+): Promise<MemberRolesRecord[]> {
+  const res = await doc().send(
+    new QueryCommand({
+      TableName: TABLE,
+      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+      ExpressionAttributeValues: {
+        ':pk': `TENANT#${tenantId}`,
+        ':sk': sub ? `MEMBERROLE#${sub}#` : 'MEMBERROLE#',
+      },
+    }),
+  );
+  return (res.Items ?? []) as MemberRolesRecord[];
+}
+
+// ---------- Auditoria administrativa ----------
+// Mutações de administração (papéis concedidos/revogados, repositórios) — um
+// registro por ato, chaveado por timestamp (leitura futura por período).
+
+export interface AuditLogRecord {
+  tenantId: string;
+  at: string; // ISO
+  sub: string; // autor
+  action: string; // ex.: 'roles.set', 'repository.create'
+  target: string; // ex.: 'sub#repoId', repoId
+  detail?: string;
+}
+
+export async function putAuditLog(rec: AuditLogRecord): Promise<void> {
+  await doc().send(
+    new PutCommand({
+      TableName: TABLE,
+      Item: { PK: `TENANT#${rec.tenantId}`, SK: `AUDIT#${rec.at}#${rec.action}`, ...rec },
+    }),
+  );
 }
 
 // ---------- Discussão integrada (canais de chat por Feature) ----------

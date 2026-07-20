@@ -20,6 +20,7 @@ import {
 } from '../db/dynamo.ts';
 import { HttpError } from '../lib/errors.ts';
 import { logger } from '../lib/logger.ts';
+import { actorLogin } from '../lib/actor.ts';
 import { createComment, fetchIssueRef, type GitHubConfig } from '../github/client.ts';
 import { stripTypePrefix } from '../github/adapter.ts';
 import {
@@ -223,12 +224,16 @@ export async function openDiscussion(
     }
   }
 
-  // Rastreabilidade na issue — exatamente uma vez por canal.
+  // Rastreabilidade na issue — exatamente uma vez por canal, com autoria.
   if (!rec.tracePosted) {
+    const author = await actorLogin(tenantId);
+    const marker = author
+      ? `<!-- discussion-channel ${JSON.stringify({ author })} -->`
+      : TRACE_MARKER;
     await createComment(
       gh,
       featureNumber,
-      `${TRACE_MARKER}\n\n💬 Discussão aberta no canal #${rec.channelName} · ${channelLink(rec.channelId)}`,
+      `${marker}\n\n💬 Discussão aberta${author ? ` por @${author}` : ''} no canal #${rec.channelName} · ${channelLink(rec.channelId)}`,
     );
     rec = { ...rec, tracePosted: true };
     await putDiscussionChannel(rec);

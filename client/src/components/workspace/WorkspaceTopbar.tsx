@@ -184,26 +184,40 @@ export function WorkspaceTopbar({
         )}
       </div>
 
-      <select
-        className="ws-topbar__role"
-        value={role}
-        onChange={(e) => {
-          const next = e.target.value as WorkspaceRole;
-          // Mantém a página na troca de papel quando ela existe no destino;
-          // senão cai no dashboard do papel.
-          window.location.hash = hrefForWorkspace(
-            next,
-            isWorkspacePage(next, page) ? page : 'dashboard',
-          );
-        }}
-        aria-label="Papel"
-      >
-        {(Object.keys(ROLE_LABELS) as WorkspaceRole[]).map((r) => (
-          <option key={r} value={r}>
-            {ROLE_LABELS[r]}
-          </option>
-        ))}
-      </select>
+      {(() => {
+        // Papéis reais (spec Gestão de usuários §4.1): o switcher exibe apenas
+        // os papéis possuídos no repositório corrente; um papel só → sem
+        // switcher. Root (ou modo de transição) vê os três.
+        const owned =
+          me?.enforced && !me.isRoot && repoId
+            ? ((me.roles.find((r) => r.repoId === repoId)?.roles ?? []) as WorkspaceRole[])
+            : (Object.keys(ROLE_LABELS) as WorkspaceRole[]);
+        if (owned.length === 1) {
+          return <span className="ws-topbar__rolefixed">{ROLE_LABELS[owned[0]]}</span>;
+        }
+        return (
+          <select
+            className="ws-topbar__role"
+            value={role}
+            onChange={(e) => {
+              const next = e.target.value as WorkspaceRole;
+              // Mantém a página na troca de papel quando ela existe no destino;
+              // senão cai no dashboard do papel.
+              window.location.hash = hrefForWorkspace(
+                next,
+                isWorkspacePage(next, page) ? page : 'dashboard',
+              );
+            }}
+            aria-label="Papel"
+          >
+            {(owned.length > 0 ? owned : (Object.keys(ROLE_LABELS) as WorkspaceRole[])).map((r) => (
+              <option key={r} value={r}>
+                {ROLE_LABELS[r]}
+              </option>
+            ))}
+          </select>
+        );
+      })()}
     </header>
   );
 }

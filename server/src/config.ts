@@ -64,4 +64,11 @@ export const config = {
   // Dev local SEM Cognito: define um tenant fixo para o middleware de auth.
   // Ignorado quando NODE_ENV=production (nunca ativa em produção).
   devTenantId: process.env.NODE_ENV === 'production' ? '' : (process.env.DEV_TENANT_ID ?? ''),
+
+  // Gestão de papéis (spec "Gestão de usuários e perfis de acesso"): quando
+  // ativa, as escritas exigem o papel da tela (pm/tech/dev) por repositório e a
+  // leitura exige algum papel (ou owner). AUTH_ENFORCED=false = modo de
+  // transição (comportamento legado de switcher livre enquanto o owner popula
+  // os papéis) — remover após a virada.
+  authEnforced: process.env.AUTH_ENFORCED !== 'false',
 };

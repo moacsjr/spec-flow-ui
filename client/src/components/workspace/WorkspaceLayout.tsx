@@ -14,7 +14,8 @@ import {
   WorkspaceProvider,
 } from '../../state/WorkspaceContext';
 import { isWorkspacePage, WORKSPACE_NAV } from '../../lib/workspaceNav';
-import { REPO_NEW_HREF } from '../../lib/router';
+import { hrefForWorkspace, REPO_NEW_HREF } from '../../lib/router';
+import { useMe } from '../../hooks/useMe';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
 import { WorkspaceTopbar } from './WorkspaceTopbar';
 import type { WorkspacePageProps } from './types';
@@ -88,6 +89,21 @@ function WorkspaceShell({ role, page: rawPage, query }: WorkspaceLayoutProps) {
   const page = isWorkspacePage(role, rawPage) ? rawPage : 'dashboard';
   const { repoId, setRepoId, milestoneNumber, setMilestoneNumber } = useWorkspace();
   const repos = useRepositories();
+  const { me } = useMe();
+
+  // Papéis reais (spec Gestão de usuários §4.1): com enforcement ativo, o
+  // switcher/URL só pode assumir papéis possuídos no repositório corrente —
+  // papel não possuído redireciona para o primeiro possuído (root vê todos).
+  const myRepoRoles =
+    me?.enforced && !me.isRoot && repoId
+      ? (me.roles.find((r) => r.repoId === repoId)?.roles ?? [])
+      : null; // null = sem restrição
+  useEffect(() => {
+    if (myRepoRoles && myRepoRoles.length > 0 && !myRepoRoles.includes(role)) {
+      window.location.hash = hrefForWorkspace(myRepoRoles[0] as WorkspaceRole, 'dashboard');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myRepoRoles?.join(','), role]);
 
   // Lembra o papel para o link "Abrir workspace" das outras telas.
   useEffect(() => rememberWorkspaceRole(role), [role]);
@@ -119,10 +135,32 @@ function WorkspaceShell({ role, page: rawPage, query }: WorkspaceLayoutProps) {
   const label = WORKSPACE_NAV[role].find((n) => n.page === page)?.label ?? page;
   const Page = PAGES[role][page];
 
+  // Autenticado sem nenhum papel e não-root (spec §2): sem acesso.
+  if (me?.enforced && !me.isRoot && me.roles.length === 0) {
+    return (
+      <div className="ws">
+        <main className="ws-content" style={{ margin: 'auto' }}>
+          <div className="repo-empty">
+            <div className="repo-empty__art" aria-hidden="true">🔒</div>
+            <p className="repo-empty__title">Sem acesso — peça a um administrador.</p>
+            <p>
+              Informe seu usuário: <code>{me.login ? `@${me.login}` : (me.email ?? '—')}</code>
+            </p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="ws">
       <WorkspaceSidebar role={role} page={page} />
       <div className="ws-main">
+        {me && !me.enforced && me.isRoot && (
+          <div className="ws-authbanner">
+            🔓 Autenticação em modo de transição — papéis ainda não aplicados (AUTH_ENFORCED=false).
+          </div>
+        )}
         <WorkspaceTopbar
           role={role}
           page={page}

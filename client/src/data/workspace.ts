@@ -413,6 +413,9 @@ export interface Me {
   login: string | null;
   slackUserId: string | null;
   email: string | null;
+  isRoot: boolean; // owner do tenant (administração)
+  enforced: boolean; // papéis reais ativos (AUTH_ENFORCED)
+  roles: { repoId: string; roles: string[] }[]; // papéis de trabalho por repositório
 }
 
 export async function fetchMe(): Promise<Me> {
