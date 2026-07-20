@@ -1,30 +1,27 @@
 // Bootstrap de autenticação/onboarding executado ANTES do render do App:
-//   1. Conclui o callback do Cognito Hosted UI (?code=...)
-//   2. Garante sessão (sem token → redireciona ao login; a página nem renderiza)
+//   1. Conclui o callback do Hosted UI (?code=... — federação Google)
+//   2. Garante sessão (sem token → o caller renderiza a TELA DE LOGIN própria)
 //   3. Conclui o setup do GitHub App (?installation_id=...&state=... — o GitHub
 //      redireciona para cá após a instalação) chamando POST /api/github/setup
 //
-// Retorna false quando um redirect foi disparado (o caller não deve renderizar).
+// 'app' = renderiza o App; 'login' = renderiza a LoginPage (design SpecWave).
 
-import { authEnabled, completeLoginCallback, getIdToken, login } from './cognito';
+import { authEnabled, completeLoginCallback, getIdToken } from './cognito';
 import { apiFetch } from '../data/apiFetch';
 
-export async function bootstrapAuth(): Promise<boolean> {
+export async function bootstrapAuth(): Promise<'app' | 'login'> {
   if (!authEnabled) {
     await finishGitHubSetup(); // dev local: setup ainda funciona via DEV_TENANT_ID
-    return true;
+    return 'app';
   }
 
   await completeLoginCallback();
 
   const token = await getIdToken();
-  if (!token) {
-    await login();
-    return false;
-  }
+  if (!token) return 'login';
 
   await finishGitHubSetup();
-  return true;
+  return 'app';
 }
 
 async function finishGitHubSetup(): Promise<void> {

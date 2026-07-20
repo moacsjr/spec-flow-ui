@@ -1,0 +1,260 @@
+/* Tela de login (design "SpecWave Login"), mapeada aos tokens do design
+   system: paleta terracota/base quente, fontes do app. Painel de marca à
+   esquerda (bg ilustrado) + formulário 480px à direita; em telas estreitas o
+   painel de marca some e o formulário ocupa tudo. */
+
+.lg {
+  min-height: 100vh;
+  background: var(--bg);
+  display: grid;
+  grid-template-columns: 1fr 480px;
+}
+@media (max-width: 860px) {
+  .lg { grid-template-columns: 1fr; }
+  .lg-brand { display: none; }
+}
+
+/* ---- painel de marca ---- */
+.lg-brand {
+  position: relative;
+  background: #0e0b09 url('/login-bg.png') center / contain no-repeat;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 48px 56px;
+  overflow: hidden;
+}
+.lg-brand__top {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.lg-brand__logo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.lg-brand__mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--accent);
+}
+.lg-brand__name {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text);
+}
+.lg-brand__hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+.lg-brand__hero h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 38px;
+  font-weight: 700;
+  color: var(--text);
+  text-wrap: pretty;
+}
+.lg-brand__tagline {
+  font-size: 17px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+}
+.lg-brand__copy {
+  position: relative;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ---- painel do formulário ---- */
+.lg-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 56px;
+}
+.lg-form {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.lg-form__head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lg-form__head h2 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+}
+.lg-form__head span {
+  font-size: 14px;
+  color: var(--text-3);
+}
+
+.lg-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 0;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-2);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.lg-google:hover { background: var(--surface-raised); }
+.lg-google__icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: conic-gradient(#4285f4 0 25%, #34a853 25% 50%, #fbbc05 50% 75%, #ea4335 75% 100%);
+}
+
+.lg-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.lg-divider span { flex: 1; height: 1px; background: var(--border); }
+.lg-divider em {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.lg-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.lg-field label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+.lg-field__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.lg-field input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--well);
+  color: var(--text-2);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+}
+.lg-field input:focus { border-color: var(--accent); }
+.lg-field input:disabled { opacity: 0.6; }
+
+.lg-pw { position: relative; }
+.lg-pw input { padding-right: 74px; }
+.lg-pw__toggle {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: none;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  padding: 0;
+}
+.lg-pw__toggle:hover { color: var(--text-2); }
+
+.lg-error {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  font-size: 13px;
+  color: var(--danger);
+}
+.lg-notice {
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--done) 35%, transparent);
+  background: color-mix(in srgb, var(--done) 9%, transparent);
+  font-size: 13px;
+  color: var(--done);
+}
+
+.lg-remember {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-3);
+  cursor: pointer;
+  user-select: none;
+}
+.lg-remember input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.lg-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 13px 0;
+  border-radius: 10px;
+  border: none;
+  background: var(--accent);
+  color: #241109;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.lg-submit:hover { background: var(--accent-light); }
+.lg-submit:disabled { opacity: 0.7; cursor: default; }
+
+.lg-foot {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.lg-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  font-family: inherit;
+  color: var(--accent-light);
+  cursor: pointer;
+}
+.lg-link:hover { text-decoration: underline; }
