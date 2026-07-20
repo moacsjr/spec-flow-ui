@@ -1,13 +1,14 @@
-// Card de um repositório conectado. O card inteiro navega para os épicos do
-// repositório (#/repos/:id/epics); a URL do GitHub continua abrindo em nova aba
-// (link externo, com stopPropagation para não disparar a navegação interna).
-// A URL é sanitizada (só http/https) para prevenir XSS.
+// Card de um repositório conectado. O card inteiro navega para a HIERARQUIA do
+// repositório — a primeira tela é a lista de iniciativas (#/repos/:id/
+// initiatives); de lá, iniciativa → épicos → drill existente. A URL do GitHub
+// continua abrindo em nova aba (link externo, com stopPropagation para não
+// disparar a navegação interna). A URL é sanitizada (só http/https).
 
 import type { KeyboardEvent } from 'react';
 import type { Repository } from '@spec-flow/shared';
 import { formatDateTime } from '../lib/date';
 import { safeHttpUrl } from '../lib/url';
-import { hrefForEpics, hrefForRepoEdit } from '../lib/router';
+import { hrefForInitiatives, hrefForRepoEdit } from '../lib/router';
 
 interface RepositoryCardProps {
   repo: Repository;
@@ -16,7 +17,7 @@ interface RepositoryCardProps {
 export function RepositoryCard({ repo }: RepositoryCardProps) {
   const externalHref = safeHttpUrl(repo.url);
   const goToEpics = () => {
-    window.location.hash = hrefForEpics(repo.id);
+    window.location.hash = hrefForInitiatives(repo.id);
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Enter' || e.key === ' ') {

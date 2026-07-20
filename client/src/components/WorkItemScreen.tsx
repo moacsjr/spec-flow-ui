@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { CreateFeatureRequest, Level, WorkItemPatch, WorkItemView } from '@spec-flow/shared';
 import { createFeature, fetchWorkItem, saveWorkItem } from '../data/workItem';
-import { DASHBOARD_HREF, hrefForEpics, hrefForItem } from '../lib/router';
+import { DASHBOARD_HREF, hrefForInitiatives, hrefForItem } from '../lib/router';
 import { TopBar, type BreadCrumb } from './TopBar';
 import { Hero } from './Hero';
 import { Description } from './Description';
@@ -132,11 +132,12 @@ export function WorkItemScreen({ repoId, level, number }: WorkItemScreenProps) {
 
   const { view } = state;
 
-  // Breadcrumb resolvido: Repositórios → Épicos do repo → (ancestrais do adapter).
-  // Descarta o 1º crumb 'Épicos' do adapter (sem link) — substituído pelo nosso.
+  // Breadcrumb resolvido: Repositórios → hierarquia do repo (iniciativas) →
+  // (ancestrais do adapter). Descarta o 1º crumb 'Épicos' do adapter (sem
+  // link) — substituído pelo link da raiz da hierarquia.
   const breadcrumb: BreadCrumb[] = [
     { label: 'Repositórios', href: DASHBOARD_HREF },
-    { label: 'Épicos', href: hrefForEpics(repoId) },
+    { label: 'Hierarquia', href: hrefForInitiatives(repoId) },
     ...view.breadcrumb.slice(1).map((c) => ({
       label: c.label,
       href: c.to ? hrefForItem(repoId, c.to.level, c.to.number) : undefined,

@@ -14,6 +14,9 @@ export type Route =
   | { view: 'repo-new' }
   | { view: 'repo-edit'; repoId: string }
   | { view: 'repo-epics'; repoId: string }
+  // Navegação hierárquica do repositório: iniciativas (number null) e os
+  // épicos de uma iniciativa (number = issue da iniciativa).
+  | { view: 'repo-tree'; repoId: string; number: number | null }
   | { view: 'item'; repoId: string; level: Level; number: number }
   | { view: 'settings' }
   | { view: 'invite'; code: string }
@@ -64,6 +67,10 @@ export function parseHash(hash: string): Route {
     const repoId = b;
     if (!repoId) return DEFAULT_ROUTE;
     if (c === 'epics') return { view: 'repo-epics', repoId };
+    if (c === 'initiatives') {
+      const n = parseInt(d, 10);
+      return { view: 'repo-tree', repoId, number: Number.isFinite(n) ? n : null };
+    }
     const number = parseInt(d, 10);
     if (LEVELS.includes(c as Level) && Number.isFinite(number)) {
       return { view: 'item', repoId, level: c as Level, number };
@@ -74,6 +81,8 @@ export function parseHash(hash: string): Route {
 
 // Helpers de href (o esquema de URL é responsabilidade do frontend).
 export const hrefForEpics = (repoId: string): string => `#/repos/${repoId}/epics`;
+export const hrefForInitiatives = (repoId: string, number?: number): string =>
+  number != null ? `#/repos/${repoId}/initiatives/${number}` : `#/repos/${repoId}/initiatives`;
 export const hrefForItem = (repoId: string, level: Level, n: number): string =>
   `#/repos/${repoId}/${level}/${n}`;
 export const hrefForWorkspace = (

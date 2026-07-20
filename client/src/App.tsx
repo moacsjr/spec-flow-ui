@@ -3,6 +3,7 @@ import { DASHBOARD_HREF, parseHash, type Route } from './lib/router';
 import { DashboardPage } from './components/DashboardPage';
 import { RepositoryFormPage } from './components/RepositoryFormPage';
 import { RepoEpicsScreen } from './components/RepoEpicsScreen';
+import { HierarchyScreen } from './components/HierarchyScreen';
 import { WorkItemScreen } from './components/WorkItemScreen';
 import { SettingsPage } from './components/SettingsPage';
 import { InviteAcceptPage } from './components/InviteAcceptPage';
@@ -55,6 +56,16 @@ export default function App() {
 
   if (route.view === 'repo-epics') {
     return <RepoEpicsScreen key={route.repoId} repoId={route.repoId} />;
+  }
+
+  if (route.view === 'repo-tree') {
+    return (
+      <HierarchyScreen
+        key={`${route.repoId}/${route.number ?? 'root'}`}
+        repoId={route.repoId}
+        number={route.number}
+      />
+    );
   }
 
   // `key` força remontar a tela ao trocar de item (reinicia o estado de carga).
