@@ -4,7 +4,7 @@
 
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { HttpError } from '../lib/errors.ts';
-import { tenantOf } from '../middleware/auth.ts';
+import { requireOwner, tenantOf } from '../middleware/auth.ts';
 import { completeSetup, createInstallUrl } from '../services/installationService.ts';
 
 export const githubRoutes = Router();
@@ -17,14 +17,15 @@ function handleError(err: unknown, res: Response, next: NextFunction): void {
   next(err);
 }
 
-githubRoutes.post('/github/install-url', (req: Request, res: Response, next: NextFunction) => {
+// Onboarding do GitHub App é administração — restrito ao owner (root).
+githubRoutes.post('/github/install-url', requireOwner, (req: Request, res: Response, next: NextFunction) => {
   const tenant = tenantOf(req);
   createInstallUrl(tenant.tenantId, tenant.sub)
     .then((url) => res.json({ url }))
     .catch((err) => handleError(err, res, next));
 });
 
-githubRoutes.post('/github/setup', (req: Request, res: Response, next: NextFunction) => {
+githubRoutes.post('/github/setup', requireOwner, (req: Request, res: Response, next: NextFunction) => {
   const tenant = tenantOf(req);
   const body = (req.body ?? {}) as Record<string, unknown>;
   const installationId = Number(body.installationId);
