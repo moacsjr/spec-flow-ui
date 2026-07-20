@@ -23,6 +23,7 @@ import {
 import { planLimits } from '../lib/plans.ts';
 import { HttpError, NotFoundError } from '../lib/errors.ts';
 import { logger } from '../lib/logger.ts';
+import { requestContext } from '../lib/requestContext.ts';
 
 const INVITE_TTL_SECONDS = 7 * 24 * 60 * 60;
 
@@ -60,7 +61,26 @@ export async function createInvite(
 // Aceita um convite: reescreve o vínculo do usuário para o tenant convidante.
 // O tenant criado automaticamente no signup do convidado fica órfão (sem dados
 // além do META — limpeza é tarefa administrativa futura).
+//
+// IMPORTANTE: esta é a ÚNICA operação legitimamente CROSS-TENANT do sistema —
+// a request roda com o claim do tenant do CONVIDADO, mas escreve chaves do
+// tenant CONVIDANTE (MEMBER# e o espelho INVITE#). Com o hardening LeadingKeys
+// ativo, o client escopado do request nega essas escritas (meio-aplicado: o
+// USER# muda e o MEMBER# não — bug observado em produção). Por isso o aceite
+// roda com o client DEFAULT; a autorização aqui é o próprio código de uso
+// único do convite.
 export async function acceptInvite(
+  code: string,
+  user: { sub: string; email?: string },
+): Promise<{ tenantId: string }> {
+  const store = requestContext.getStore();
+  if (store?.doc) {
+    return requestContext.run({ ...store, doc: undefined }, () => acceptInviteUnscoped(code, user));
+  }
+  return acceptInviteUnscoped(code, user);
+}
+
+async function acceptInviteUnscoped(
   code: string,
   user: { sub: string; email?: string },
 ): Promise<{ tenantId: string }> {
