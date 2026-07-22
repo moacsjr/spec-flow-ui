@@ -6,6 +6,7 @@ import type { ChildItem, Crumb, Level, MetaField, Person, Status, WorkItemView }
 import { avatarColor, initials } from '../lib/avatar.ts';
 import { STATUS_LABELS, meanPct, statusFromPct } from '../lib/status.ts';
 import { dateRange } from '../lib/date.ts';
+import { stripWrappingCodeFence } from '../lib/markdown.ts';
 import type { GhEpicPayload, GhIssue, GhUser } from './types.ts';
 
 // Labels de tipo do RFC (config.mjs do spec-flow).
@@ -231,7 +232,7 @@ export function adaptEpic(payload: GhEpicPayload, ctx: AdaptContext = {}): WorkI
     owner,
     breadcrumb: [{ label: 'Épicos' }, { label: team }, { label: codeOf(epic, team) }],
     meta,
-    descriptionMdx: epic.body || '',
+    descriptionMdx: stripWrappingCodeFence(epic.body) || '',
     headerPct: meanPct(children), // regra da RFC: média dos % das features
     progressLabel: 'Progresso do épico',
     childrenLabel: 'Features',
@@ -266,7 +267,7 @@ export function adaptFeature(issue: GhIssue, ctx: AdaptContext = {}): WorkItemVi
     owner,
     breadcrumb,
     meta,
-    descriptionMdx: issue.body || '',
+    descriptionMdx: stripWrappingCodeFence(issue.body) || '',
     specMdx: ctx.spec ?? null,
     planMdx: ctx.plan ?? null,
     planApproved: labelNames(issue).includes('spec-wave:plan-approved'),
@@ -303,7 +304,7 @@ export function adaptStory(issue: GhIssue, ctx: AdaptContext = {}): WorkItemView
     owner,
     breadcrumb,
     meta,
-    descriptionMdx: issue.body || '',
+    descriptionMdx: stripWrappingCodeFence(issue.body) || '',
     devStatus: boardStatus(issue),
     devAgentRequested: labelNames(issue).includes('spec-wave:dev-agent'),
     devStage: issue.projectStage ?? null,
