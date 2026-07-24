@@ -9,7 +9,7 @@ export interface PlanLimits {
 }
 
 export const PLANS: Record<string, PlanLimits> = {
-  free: { maxRepos: 2, refinesPerMonth: 20, maxMembers: 3 },
+  free: { maxRepos: 2, refinesPerMonth: 20, maxMembers: 10 },
   pro: { maxRepos: 25, refinesPerMonth: 500, maxMembers: 25 },
 };
 
