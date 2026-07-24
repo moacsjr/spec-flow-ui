@@ -73,12 +73,29 @@ const COUNT_FIELDS = `
   state
 `;
 
+// Comentários — SÓ na issue raiz (nível 0). Ficam fora de ISSUE_FIELDS de
+// propósito: incluí-los nas sub-issues multiplicaria o orçamento de nós do
+// GraphQL sem uso (a tela só exibe os comentários do item atual). `last: 50`
+// prioriza os mais recentes (em ordem cronológica); `totalCount` diz se a
+// janela cobre todos (relevante p/ resolveFeaturePaths reusar os corpos).
+const COMMENT_FIELDS = `
+  comments(last: 50) {
+    totalCount
+    nodes {
+      body
+      createdAt
+      author { login ... on User { name } }
+    }
+  }
+`;
+
 // 3 níveis de sub-issues: Feature → Story → Task.
 const QUERY = `
 query EpicView($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
     issue(number: $number) {
       ${ISSUE_FIELDS}
+      ${COMMENT_FIELDS}
       subIssues(first: 50) {
         nodes {
           ${ISSUE_FIELDS}
@@ -144,7 +161,20 @@ function projectFieldOf(node: any, fieldName: string): string | null {
 }
 
 function normalize(node: any): GhIssue {
+  // Comentários só existem na issue raiz da query de work item; nas demais o
+  // campo fica ausente (undefined) — o adapter trata como lista vazia.
+  const comments = node.comments
+    ? {
+        comments: (node.comments.nodes ?? []).map((c: any) => ({
+          body: c.body ?? '',
+          createdAt: c.createdAt ?? '',
+          author: c.author ? { login: c.author.login, name: c.author.name ?? null } : null,
+        })),
+        commentsTotal: node.comments.totalCount ?? 0,
+      }
+    : {};
   return {
+    ...comments,
     number: node.number,
     title: node.title,
     body: node.body ?? '',

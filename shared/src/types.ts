@@ -191,6 +191,15 @@ export interface ChildItem {
   to?: RouteCoord; // destino de drill-down (folhas não têm)
 }
 
+// Comentário da issue exibido na tela do work item. O corpo é markdown (mesmo
+// pipeline de renderização da descrição). Vem embutido no WorkItemView — o
+// client não faz request adicional para comentários.
+export interface IssueComment {
+  author: Person;
+  bodyMdx: string;
+  createdAt: string; // ISO 8601
+}
+
 // Campo de metadado do hero. `kind` decide a renderização especial.
 export interface MetaField {
   label: string;
@@ -225,6 +234,9 @@ export interface WorkItemView {
   progressLabel: string; // "Progresso do épico" / "da feature" / "da story"
   childrenLabel: string; // "Features" | "Stories" | "Tasks"
   children: ChildItem[];
+  // Comentários da issue (ordem cronológica; até os 50 mais recentes). Buscados
+  // na mesma query GraphQL da issue — sem requests extras.
+  comments: IssueComment[];
 }
 
 // Edição parcial de um work item (issue do GitHub). Campos espelham WorkItemView

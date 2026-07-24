@@ -9,6 +9,7 @@ export type {
   RepositoryEpics,
   Person,
   ChildItem,
+  IssueComment,
   MetaField,
   Crumb,
   WorkItemView,

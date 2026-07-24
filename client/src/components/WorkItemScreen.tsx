@@ -10,6 +10,7 @@ import { DASHBOARD_HREF, hrefForInitiatives, hrefForItem } from '../lib/router';
 import { TopBar, type BreadCrumb } from './TopBar';
 import { Hero } from './Hero';
 import { Description } from './Description';
+import { Comments } from './Comments';
 import { ItemsPanel } from './ItemsPanel';
 import { LoadingState } from './LoadingState';
 
@@ -158,17 +159,20 @@ export function WorkItemScreen({ repoId, level, number }: WorkItemScreenProps) {
           onSave={handleSave}
         />
         <div className="body-grid">
-          <Description
-            level={view.level}
-            repoId={repoId}
-            number={number}
-            source={view.descriptionMdx}
-            spec={view.specMdx}
-            plan={view.planMdx}
-            planApproved={view.planApproved}
-            onSave={handleSave}
-            applyView={applyView}
-          />
+          <div className="body-col">
+            <Description
+              level={view.level}
+              repoId={repoId}
+              number={number}
+              source={view.descriptionMdx}
+              spec={view.specMdx}
+              plan={view.planMdx}
+              planApproved={view.planApproved}
+              onSave={handleSave}
+              applyView={applyView}
+            />
+            <Comments comments={view.comments ?? []} />
+          </div>
           <ItemsPanel
             items={view.children}
             label={view.childrenLabel}

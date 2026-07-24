@@ -81,18 +81,23 @@ import {
 // dos comentários (o último vence, p/ o caso de regeração); sem comentário,
 // caímos no slug derivado do título atual. spec e plan são resolvidos
 // independentemente (podem ter sido gerados sob títulos diferentes).
+// `knownComments`: corpos já em mãos (ex.: vindos da query GraphQL da issue) —
+// quando informados, evita o request REST de comentários.
 export async function resolveFeaturePaths(
   config: GitHubConfig,
   number: number,
   title: string,
+  knownComments?: string[],
 ): Promise<{ specPath: string; planPath: string }> {
   const fallback = slugify(title);
 
-  let comments: string[] = [];
-  try {
-    comments = await fetchIssueComments(config, number);
-  } catch {
-    /* comentários inacessíveis → usa o slug do título */
+  let comments: string[] = knownComments ?? [];
+  if (!knownComments) {
+    try {
+      comments = await fetchIssueComments(config, number);
+    } catch {
+      /* comentários inacessíveis → usa o slug do título */
+    }
   }
 
   const slugOf = (file: 'spec' | 'plan'): string => {
@@ -133,7 +138,15 @@ export async function loadWorkItem(
   }
 
   if (level === 'feature') {
-    const { specPath, planPath } = await resolveFeaturePaths(config, number, issue.title);
+    // Reusa os comentários que a query GraphQL da issue já trouxe — poupa o
+    // request REST de comentários. Só quando a janela (last: 50) cobre TODOS:
+    // com mais comentários que isso, o da geração pode ter ficado de fora,
+    // então caímos no caminho REST (100 por página).
+    const known =
+      issue.comments && (issue.commentsTotal ?? 0) <= issue.comments.length
+        ? issue.comments.map((c) => c.body)
+        : undefined;
+    const { specPath, planPath } = await resolveFeaturePaths(config, number, issue.title, known);
     const [spec, plan] = await Promise.all([
       fetchFileContent(config, specPath).catch(() => null),
       fetchFileContent(config, planPath).catch(() => null),

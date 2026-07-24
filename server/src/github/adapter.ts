@@ -2,7 +2,16 @@
 // A hierarquia RFC-001 é uniforme, então os três níveis reusam os mesmos helpers;
 // só o conjunto de metadados, os rótulos e o tipo de filho (com/sem barra) variam.
 
-import type { ChildItem, Crumb, Level, MetaField, Person, Status, WorkItemView } from '@spec-flow/shared';
+import type {
+  ChildItem,
+  Crumb,
+  IssueComment,
+  Level,
+  MetaField,
+  Person,
+  Status,
+  WorkItemView,
+} from '@spec-flow/shared';
 import { avatarColor, initials } from '../lib/avatar.ts';
 import { STATUS_LABELS, meanPct, statusFromPct } from '../lib/status.ts';
 import { dateRange } from '../lib/date.ts';
@@ -149,6 +158,15 @@ function toChild(issue: GhIssue, opts: { leaf?: boolean; childLevel?: Level } = 
   return { ...base, status: statusFromPct(pct), pct, doneTasks: done, totalTasks: total, leaf: false };
 }
 
+// Comentários da issue → modelo de exibição. Autor removido (ghost) vira "—".
+function commentsOf(issue: GhIssue): IssueComment[] {
+  return (issue.comments || []).map((c) => ({
+    author: personFrom(c.author ?? undefined, `comment-${issue.number}`),
+    bodyMdx: c.body,
+    createdAt: c.createdAt,
+  }));
+}
+
 // Time: label `team:*` → milestone → fallback informado.
 function teamOf(issue: GhIssue, fallbackTeam?: string): string {
   const teamLabel = labelNames(issue).find((n) => n.startsWith('team:'));
@@ -237,6 +255,7 @@ export function adaptEpic(payload: GhEpicPayload, ctx: AdaptContext = {}): WorkI
     progressLabel: 'Progresso do épico',
     childrenLabel: 'Features',
     children,
+    comments: commentsOf(epic),
   };
 }
 
@@ -275,6 +294,7 @@ export function adaptFeature(issue: GhIssue, ctx: AdaptContext = {}): WorkItemVi
     progressLabel: 'Progresso da feature',
     childrenLabel: 'Stories',
     children,
+    comments: commentsOf(issue),
   };
 }
 
@@ -312,6 +332,7 @@ export function adaptStory(issue: GhIssue, ctx: AdaptContext = {}): WorkItemView
     progressLabel: 'Progresso da story',
     childrenLabel: 'Tasks',
     children,
+    comments: commentsOf(issue),
   };
 }
 

@@ -20,6 +20,13 @@ export interface GhMilestone {
   createdAt?: string | null; // ISO
 }
 
+// Comentário de issue vindo do GraphQL (embutido na query da issue raiz).
+export interface GhComment {
+  body: string;
+  createdAt: string; // ISO
+  author: GhUser | null; // null p/ contas removidas (ghost)
+}
+
 // Issue genérica (qualquer nível da hierarquia).
 export interface GhIssue {
   number: number;
@@ -44,6 +51,11 @@ export interface GhIssue {
   // Sub-issues (GitHub sub-issues / hierarquia). Para uma Feature, contém suas
   // Stories; cada Story contém suas Tasks. Folhas têm subIssues vazio/ausente.
   subIssues?: GhIssue[];
+  // Comentários (só na issue raiz da query de work item; até os 50 mais
+  // recentes, ordem cronológica). Ausente nas demais queries/níveis.
+  comments?: GhComment[];
+  // Total real de comentários da issue (pode exceder comments.length).
+  commentsTotal?: number;
 }
 
 // Resposta consolidada que o adapter espera: o Epic + suas Features.
