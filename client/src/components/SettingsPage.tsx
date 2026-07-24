@@ -173,6 +173,8 @@ export function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+  // Código do convite recém-copiado — feedback "Copiado!" no botão da linha.
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [orKey, setOrKey] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -187,6 +189,23 @@ export function SettingsPage() {
   }, []);
 
   const isOwner = billing?.role === 'owner';
+
+  // Copia o link de aceite de um convite pendente — permite reenviar o convite
+  // sem gerar um novo (o código é de uso único, mas válido até ser aceito/expirar).
+  const copyInvite = (code: string) => {
+    setError(null);
+    const link = `${window.location.origin}/#/invite/${code}`;
+    navigator.clipboard
+      .writeText(link)
+      .then(() => {
+        setCopiedCode(code);
+        setTimeout(() => setCopiedCode((cur) => (cur === code ? null : cur)), 2000);
+      })
+      .catch(() => {
+        // Clipboard indisponível (permissão/contexto): mostra o link para cópia manual.
+        setInviteLink(link);
+      });
+  };
 
   const submitInvite = (e: FormEvent) => {
     e.preventDefault();
@@ -288,7 +307,17 @@ export function SettingsPage() {
             ))}
             {invites.map((i) => (
               <li key={i.code}>
-                {i.email} — convite pendente ({i.role})
+                {i.email} — convite pendente ({i.role}){' '}
+                {isOwner && (
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => copyInvite(i.code)}
+                    aria-label={`Copiar link do convite de ${i.email}`}
+                  >
+                    {copiedCode === i.code ? 'Copiado!' : 'Copiar convite'}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
